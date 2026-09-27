@@ -207,6 +207,42 @@ export async function POST(request: NextRequest) {
       },
     }).catch(() => {})
 
+    // ── Create notifications for all targeted students ──────
+    try {
+      // Find all students that match the target
+      const studentWhere: Record<string, unknown> = {}
+      if (targetType === 'strand'         && strandId)               studentWhere.strandId  = strandId
+      if (targetType === 'section'        && sectionId)              studentWhere.sectionId = sectionId
+      if (targetType === 'strand_section' && strandId && sectionId) {
+        studentWhere.strandId  = strandId
+        studentWhere.sectionId = sectionId
+      }
+      // 'all' → no filter, notify everyone
+
+      const students = await prisma.student.findMany({
+        where: Object.keys(studentWhere).length > 0 ? studentWhere : undefined,
+        select: { id: true },
+      })
+
+      if (students.length > 0) {
+        await prisma.notification.createMany({
+          data: students.map(s => ({
+            userId:    s.id,
+            userType:  'student',
+            type:      'announcement',
+            title:     `📢 ${title}`,
+            message:   content.trim().slice(0, 160),
+            isRead:    false,
+            link:      '/announcements',
+          })),
+          skipDuplicates: true,
+        })
+      }
+    } catch (notifErr) {
+      // Non-fatal — announcement still created even if notifications fail
+      console.warn('Notification creation failed (non-fatal):', notifErr)
+    }
+
     return NextResponse.json({ success: true, announcement })
   } catch (error) {
     console.error('POST announcement error:', error)
