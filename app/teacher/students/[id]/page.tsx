@@ -241,10 +241,10 @@ export default function TeacherStudentDetailPage() {
   const [loadErr,       setLoadErr]       = useState('')
   const [teachers,      setTeachers]      = useState<Teacher[]>([])
   const [assigningSuper, setAssigningSuper] = useState(false)
+  const [selectedSupervisor, setSelectedSupervisor] = useState<string>('')
   const [reviewTarget,  setReviewTarget]  = useState<Narrative | null>(null)
   const [toasts,        setToasts]        = useState<{ id: number; msg: string; kind: ToastKind }[]>([])
   const toastCounter = useRef(0)
-  const supervisorRef = useRef<HTMLSelectElement>(null)
 
   const studentId = params.id as string
 
@@ -264,7 +264,10 @@ export default function TeacherStudentDetailPage() {
       fetch(`/api/teacher/student-detail/${studentId}`).then(r => r.json()),
       fetch('/api/teacher/list').then(r => r.json()),
     ]).then(([sd, td]) => {
-      if (sd.student) setStudent(sd.student)
+      if (sd.student) {
+        setStudent(sd.student)
+        setSelectedSupervisor(sd.student.supervisor?.id ?? '')
+      }
       else setLoadErr(sd.error ?? 'Student not found')
       setTeachers(td.teachers ?? [])
     }).catch(() => setLoadErr('Failed to load student'))
@@ -277,11 +280,12 @@ export default function TeacherStudentDetailPage() {
       const res = await fetch(`/api/teacher/students/${studentId}/supervisor`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ supervisorId }),
+        body: JSON.stringify({ supervisorId: supervisorId || null }),
       })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error)
       setStudent(prev => prev ? { ...prev, supervisor: d.supervisor ?? undefined } : null)
+      setSelectedSupervisor(d.supervisor?.id ?? '')
       addToast(supervisorId ? '✓ Supervisor assigned!' : 'Supervisor removed.', 'success')
     } catch (e: unknown) {
       addToast(e instanceof Error ? e.message : 'Failed to assign supervisor.', 'error')
@@ -297,24 +301,7 @@ export default function TeacherStudentDetailPage() {
   }
 
   /* ── Loading ─────────────────────────────────────────────── */
-  if (loading || status === 'loading') return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(135deg,#F97316,#EA580C,#FBBF24)' }}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}`}</style>
-      <div style={{ width: 64, height: 64, borderRadius: 18, background: 'rgba(255,255,255,0.25)',
-        border: '3px solid rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', marginBottom: 20, animation: 'pulse 2s ease infinite' }}>
-        <svg style={{ width: 30, height: 30, color: 'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-        </svg>
-      </div>
-      <div style={{ width: 40, height: 40, border: '4px solid rgba(255,255,255,0.3)',
-        borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: 14 }} />
-      <p style={{ color: 'white', fontWeight: 700, fontSize: 14 }}>Loading student profile…</p>
-    </div>
-  )
+  if (loading || status === 'loading') return null
 
   if (loadErr || !student) return (
     <AppShell forceTeacher>
@@ -502,11 +489,13 @@ export default function TeacherStudentDetailPage() {
           </p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
-              <select ref={supervisorRef} defaultValue={student.supervisor?.id ?? ''}
-                style={{ width: '100%', padding: '10px 36px 10px 14px', border: '1.5px solid #E5E7EB',
+              <select
+                value={selectedSupervisor}
+                onChange={e => setSelectedSupervisor(e.target.value)}
+                style={{ width: '100%', padding: '10px 36px 10px 14px', border: '1.5px solid #FFE4C4',
                   borderRadius: 10, fontSize: 14, fontFamily: 'inherit', background: 'white',
                   outline: 'none', boxSizing: 'border-box' as const, appearance: 'none' as const,
-                  cursor: 'pointer' }}>
+                  cursor: 'pointer', color: '#1C1917' }}>
                 <option value="">— No Supervisor —</option>
                 {teachers.map(t => (
                   <option key={t.id} value={t.id}>{t.name} ({t.email})</option>
@@ -518,12 +507,12 @@ export default function TeacherStudentDetailPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
               </svg>
             </div>
-            <button onClick={() => handleAssignSupervisor(supervisorRef.current?.value || null)}
+            <button onClick={() => handleAssignSupervisor(selectedSupervisor || null)}
               disabled={assigningSuper}
-              style={{ padding: '10px 22px', background: assigningSuper ? '#FED7AA' : 'linear-gradient(135deg,#F97316,#EA580C)',
+              style={{ padding: '10px 22px', background: assigningSuper ? '#FED7AA' : 'linear-gradient(135deg,#F97316,#FB923C)',
                 color: 'white', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700,
                 cursor: assigningSuper ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
-                whiteSpace: 'nowrap', boxShadow: assigningSuper ? 'none' : '0 3px 10px rgba(249,115,22,0.35)',
+                whiteSpace: 'nowrap', boxShadow: assigningSuper ? 'none' : '0 3px 10px rgba(249,115,22,0.3)',
                 display: 'flex', alignItems: 'center', gap: 6 }}>
               {assigningSuper ? (
                 <><div style={{ width: 14, height: 14, border: '2.5px solid rgba(255,255,255,0.4)',

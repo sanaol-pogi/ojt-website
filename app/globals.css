@@ -638,8 +638,43 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* ─────────────────────────────────────────────────────────
-   LOGIN PAGE — two-column layout
+   PAGE TRANSITIONS — smooth fade+slide on every navigation
 ───────────────────────────────────────────────────────── */
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+@keyframes page-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-6px); }
+}
+
+/* Applied via JS on route change */
+.page-transitioning-out {
+  animation: page-out 0.18s ease forwards;
+  pointer-events: none;
+}
+.page-transitioning-in {
+  animation: page-in 0.32s cubic-bezier(0.16,1,0.3,1) both;
+}
+
+/* Native View Transitions API (Chrome 111+) */
+@supports (view-transition-name: root) {
+  ::view-transition-old(root) {
+    animation: page-out 0.18s ease forwards;
+  }
+  ::view-transition-new(root) {
+    animation: page-in 0.32s cubic-bezier(0.16,1,0.3,1) both;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   LINK / BUTTON PRESS FEEDBACK
+───────────────────────────────────────────────────────── */
+a, button {
+  -webkit-tap-highlight-color: transparent;
+}
+
 .login-left { display: none; }
 @media (min-width: 900px) {
   .login-left { display: flex !important; }
