@@ -101,7 +101,8 @@ function Tab({ label, active, count, onClick, dataTut }: {
       background: active ? 'linear-gradient(135deg,#F97316,#FB923C)' : 'white',
       color: active ? 'white' : '#78716C',
       display: 'flex', alignItems: 'center', gap: 6,
-      flexShrink: 0, whiteSpace: 'nowrap',
+      flexShrink: 0, whiteSpace: 'nowrap', flex: '1 1 auto',
+      justifyContent: 'center',
       boxShadow: active ? '0 3px 12px rgba(249,115,22,0.35)' : '0 1px 3px rgba(0,0,0,0.06)',
     }}>
       {label}
@@ -658,6 +659,7 @@ export default function TeacherDashboard() {
         <div style={{
           display:'flex', gap:8, overflowX:'auto', paddingBottom:2,
           scrollbarWidth:'none', WebkitOverflowScrolling:'touch',
+          flexWrap:'wrap',
         }} className="hide-scrollbar">
           <style>{`.hide-scrollbar::-webkit-scrollbar{display:none}`}</style>
           <Tab label="Students"      active={activeTab==='students'}      count={students.length}          onClick={()=>setActiveTab('students')}      dataTut="students-tab" />
@@ -865,12 +867,12 @@ export default function TeacherDashboard() {
           </div>
         )}
 
-        {/* Delete teacher confirm modal */}
+        {/* Delete teacher confirm modal — OUTSIDE tab blocks so it always renders */}
         {deleteTeacherTarget && (
           <ConfirmModal
             title="Delete Teacher Account?"
             body={<>This will permanently delete <strong>{deleteTeacherTarget.name}</strong>&apos;s account. Their students will be unassigned.</>}
-            confirmLabel="Yes, Delete"
+            confirmLabel={deletingTeacher ? 'Deleting...' : 'Yes, Delete'}
             danger
             loading={deletingTeacher}
             onConfirm={handleDeleteTeacher}

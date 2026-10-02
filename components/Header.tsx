@@ -6,6 +6,13 @@ import { useRouter, usePathname } from 'next/navigation'
 import Image from 'next/image'
 import { useProfilePicture } from './ProfilePictureContext'
 
+/* ─── Badge counts for student nav ──────────────────────── */
+interface NavBadges {
+  narratives: number    // pending review
+  requirements: number  // incomplete items
+  announcements: number // unread
+}
+
 /* ─── Avatar ─────────────────────────────────────────────── */
 export function Avatar({ src, name, size = 34, round = true }: {
   src?: string | null; name?: string | null; size?: number; round?: boolean
@@ -21,7 +28,6 @@ export function Avatar({ src, name, size = 34, round = true }: {
         unoptimized={src.startsWith('data:')} onError={() => setErr(true)} />
     </div>
   )
-
   return (
     <div style={{
       width: size, height: size, borderRadius: radius, flexShrink: 0,
@@ -42,15 +48,16 @@ const STRAND_GRAD: Record<string, string> = {
   DEFAULT: 'linear-gradient(135deg,#F97316 0%,#FB923C 50%,#FED7AA 100%)',
 }
 
-/* ─── Nav item ───────────────────────────────────────────── */
-function NavLink({ label, path, current, onClick }: {
-  label: string; path: string; current: boolean; onClick: () => void
+/* ─── Nav item with optional red badge ───────────────────── */
+function NavLink({ label, path, current, onClick, badge }: {
+  label: string; path: string; current: boolean; onClick: () => void; badge?: number
 }) {
   const [hov, setHov] = useState(false)
   return (
     <button onClick={onClick}
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       style={{
+        position: 'relative',
         background: current ? 'rgba(255,255,255,0.18)' : hov ? 'rgba(255,255,255,0.1)' : 'transparent',
         border: 'none', borderRadius: 8, padding: '6px 12px',
         color: current ? 'white' : 'rgba(255,255,255,0.75)',
@@ -58,6 +65,21 @@ function NavLink({ label, path, current, onClick }: {
         fontFamily: 'inherit', transition: 'all 0.15s', whiteSpace: 'nowrap',
       }}>
       {label}
+      {!!badge && badge > 0 && (
+        <span style={{
+          position: 'absolute', top: 1, right: 1,
+          minWidth: 16, height: 16,
+          background: '#EF4444',
+          color: 'white', fontSize: 9, fontWeight: 800,
+          borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 4px', lineHeight: 1,
+          border: '1.5px solid rgba(255,255,255,0.8)',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+          animation: 'badgePop 0.3s cubic-bezier(0.34,1.5,0.64,1) both',
+        }}>
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
     </button>
   )
 }
@@ -73,12 +95,57 @@ export default function Header({ strandCode, forceTeacher }: {
   const [menuOpen,   setMenuOpen]   = useState(false)
   const [mobileNav,  setMobileNav]  = useState(false)
   const [activeTab,  setActiveTab]  = useState('')
+  const [badges,     setBadges]     = useState<NavBadges>({ narratives: 0, requirements: 0, announcements: 0 })
+  const [installPrompt, setInstallPrompt] = useState<{ prompt: () => Promise<void> } | null>(null)
+  const [showInstall,   setShowInstall]   = useState(false)
+
+  // Capture PWA install prompt
+  useEffect(() => {
+    if (window.matchMedia('(display-mode: standalone)').matches) return
+    const handler = (e: Event) => {
+      e.preventDefault()
+      setInstallPrompt(e as unknown as { prompt: () => Promise<void> })
+      setShowInstall(true)
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
 
   // Read ?tab= from URL safely on client only (avoids SSR crash)
   useEffect(() => {
     const tab = new URLSearchParams(window.location.search).get('tab') ?? ''
     setActiveTab(tab)
   }, [pathname])
+
+  // Fetch badge counts for students only
+  useEffect(() => {
+    if (!session?.user || session.user.role !== 'student') return
+    const fetchBadges = async () => {
+      try {
+        const [narrRes, checkRes, notifRes] = await Promise.all([
+          fetch('/api/narratives?stats=true').catch(() => null),
+          fetch('/api/checklists/my-checklist').catch(() => null),
+          fetch('/api/notifications').catch(() => null),
+        ])
+        let narratives = 0, requirements = 0, announcements = 0
+        if (narrRes?.ok) {
+          const d = await narrRes.json()
+          narratives = d.stats?.pending ?? 0
+        }
+        if (checkRes?.ok) {
+          const d = await checkRes.json()
+          const cl = d.checklists?.[0]
+          if (cl) requirements = (cl.stats?.totalItems ?? 0) - (cl.stats?.completedItems ?? 0)
+        }
+        if (notifRes?.ok) {
+          const d = await notifRes.json()
+          announcements = (d.notifications ?? []).filter((n: { isRead: boolean; type: string }) => !n.isRead && n.type === 'announcement').length
+        }
+        setBadges({ narratives, requirements, announcements })
+      } catch { /* silent */ }
+    }
+    fetchBadges()
+  }, [session, pathname])
 
   if (!session) return null
 
@@ -99,18 +166,18 @@ export default function Header({ strandCode, forceTeacher }: {
   const userRole   = isTeacher ? 'Teacher' : 'Student'
 
   const studentNav = [
-    { label: 'Home',          path: '/dashboard' },
-    { label: 'Narratives',    path: '/narratives' },
-    { label: 'Requirements',  path: '/checklist' },
-    { label: 'Announcements', path: '/announcements' },
-    { label: 'Profile',       path: '/profile/edit' },
+    { label: 'Home',          path: '/dashboard',      badge: 0 },
+    { label: 'Narratives',    path: '/narratives',     badge: badges.narratives },
+    { label: 'Requirements',  path: '/checklist',      badge: badges.requirements },
+    { label: 'Announcements', path: '/announcements',  badge: badges.announcements },
+    { label: 'Profile',       path: '/profile/edit',   badge: 0 },
   ]
   const teacherNav = [
-    { label: 'Dashboard',     path: '/teacher/dashboard', tab: '' },
-    { label: 'Students',      path: '/teacher/dashboard?tab=students',      tab: 'students' },
-    { label: 'Announcements', path: '/teacher/dashboard?tab=announcements', tab: 'announcements' },
-    { label: 'Teachers',      path: '/teacher/dashboard?tab=teachers',      tab: 'teachers' },
-    { label: 'Profile',       path: '/teacher/profile',                     tab: '' },
+    { label: 'Dashboard',     path: '/teacher/dashboard', tab: '', badge: 0 },
+    { label: 'Students',      path: '/teacher/dashboard?tab=students',      tab: 'students',      badge: 0 },
+    { label: 'Announcements', path: '/teacher/dashboard?tab=announcements', tab: 'announcements', badge: 0 },
+    { label: 'Teachers',      path: '/teacher/dashboard?tab=teachers',      tab: 'teachers',      badge: 0 },
+    { label: 'Profile',       path: '/teacher/profile',                     tab: '',              badge: 0 },
   ]
   const navItems = isTeacher ? teacherNav : studentNav
 
@@ -176,15 +243,16 @@ export default function Header({ strandCode, forceTeacher }: {
               </div>
             </button>
 
-            {/* Desktop Nav */}
+            {/* Desktop Nav — stretched across full available width */}
             <nav style={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1,
-              overflowX: 'auto', minWidth: 0, scrollbarWidth: 'none' }}
+              overflowX: 'auto', minWidth: 0, scrollbarWidth: 'none', justifyContent: 'flex-start' }}
               className="header-nav">
               {navItems.map(item => (
                 <NavLink
                   key={item.label}
                   label={item.label}
                   path={item.path}
+                  badge={(item as { badge?: number }).badge}
                   current={
                     isTeacher
                       ? (item as { tab?: string }).tab
@@ -213,7 +281,34 @@ export default function Header({ strandCode, forceTeacher }: {
                 </svg>
               </button>
 
-              {/* Share button — always visible */}
+              {/* PWA Install button — only when installable */}
+              {showInstall && (
+                <button
+                  onClick={async () => {
+                    if (installPrompt) {
+                      await installPrompt.prompt()
+                      setShowInstall(false)
+                    }
+                  }}
+                  style={{
+                    background: 'rgba(255,255,255,0.22)',
+                    border: '1.5px solid rgba(255,255,255,0.5)',
+                    borderRadius: 10, padding: '7px 12px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 6, color: 'white',
+                    fontSize: 12, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap',
+                    animation: 'badgePop 0.4s cubic-bezier(0.34,1.5,0.64,1) both',
+                  }}
+                  title="Install App"
+                >
+                  <svg style={{ width: 14, height: 14, flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                  </svg>
+                  Install
+                </button>
+              )}
+
+              {/* Share button */}
               <button
                 onClick={async () => {
                   const url   = window.location.href
@@ -230,8 +325,7 @@ export default function Header({ strandCode, forceTeacher }: {
                   border: '1.5px solid rgba(255,255,255,0.3)',
                   borderRadius: 10, padding: '7px 12px', cursor: 'pointer',
                   display: 'flex', alignItems: 'center', gap: 6, color: 'white',
-                  fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
-                  whiteSpace: 'nowrap',
+                  fontSize: 12, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap',
                 }}
                 title="Share this page"
               >
@@ -369,15 +463,44 @@ export default function Header({ strandCode, forceTeacher }: {
           <div style={{ background: 'rgba(0,0,0,0.3)', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
             <div style={{ maxWidth: 1280, margin: '0 auto', padding: '12px 20px',
               display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {navItems.map(item => (
-                <button key={item.path + item.label}
-                  onClick={() => { router.push(item.path); setMobileNav(false) }}
-                  style={{ padding: '10px 14px', background: pathname === item.path ? 'rgba(255,255,255,0.15)' : 'transparent',
-                    border: 'none', borderRadius: 8, color: 'white', fontSize: 14, fontWeight: 600,
-                    cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
-                  {item.label}
+              {navItems.map(item => {
+                const badge = (item as { badge?: number }).badge ?? 0
+                return (
+                  <button key={item.path + item.label}
+                    onClick={() => { router.push(item.path); setMobileNav(false) }}
+                    style={{ padding: '10px 14px', background: pathname === item.path ? 'rgba(255,255,255,0.15)' : 'transparent',
+                      border: 'none', borderRadius: 8, color: 'white', fontSize: 14, fontWeight: 600,
+                      cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>{item.label}</span>
+                    {badge > 0 && (
+                      <span style={{ background: '#EF4444', color: 'white', fontSize: 11, fontWeight: 800,
+                        borderRadius: 999, padding: '1px 7px', minWidth: 20, textAlign: 'center' }}>
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+              {/* Install in mobile nav */}
+              {showInstall && (
+                <button
+                  onClick={async () => {
+                    setMobileNav(false)
+                    if (installPrompt) { await installPrompt.prompt(); setShowInstall(false) }
+                  }}
+                  style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.15)',
+                    border: '1.5px solid rgba(255,255,255,0.4)',
+                    borderRadius: 8, color: 'white', fontSize: 14, fontWeight: 700,
+                    cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                    display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                  </svg>
+                  Install App
                 </button>
-              ))}
+              )}
               {/* Share in mobile nav */}
               <button
                 onClick={async () => {
@@ -407,6 +530,7 @@ export default function Header({ strandCode, forceTeacher }: {
 
       <style>{`
         @keyframes fadeIn { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes badgePop { from { transform:scale(0); opacity:0; } to { transform:scale(1); opacity:1; } }
 
         @media (min-width: 640px) {
           .header-title { display: block !important; }
