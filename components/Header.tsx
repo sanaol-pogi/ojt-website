@@ -173,11 +173,11 @@ export default function Header({ strandCode, forceTeacher }: {
     { label: 'Profile',       path: '/profile/edit',   badge: 0 },
   ]
   const teacherNav = [
-    { label: 'Dashboard',     path: '/teacher/dashboard', tab: '', badge: 0 },
-    { label: 'Students',      path: '/teacher/dashboard?tab=students',      tab: 'students',      badge: 0 },
-    { label: 'Announcements', path: '/teacher/dashboard?tab=announcements', tab: 'announcements', badge: 0 },
-    { label: 'Teachers',      path: '/teacher/dashboard?tab=teachers',      tab: 'teachers',      badge: 0 },
-    { label: 'Profile',       path: '/teacher/profile',                     tab: '',              badge: 0 },
+    { label: 'Dashboard',   path: '/teacher/dashboard', tab: '', badge: 0 },
+    { label: 'Students',    path: '/teacher/dashboard?tab=students',      tab: 'students',      badge: 0 },
+    { label: 'Announce',    path: '/teacher/dashboard?tab=announcements', tab: 'announcements', badge: 0 },
+    { label: 'Teachers',    path: '/teacher/dashboard?tab=teachers',      tab: 'teachers',      badge: 0 },
+    { label: 'Profile',     path: '/teacher/profile',                     tab: '',              badge: 0 },
   ]
   const navItems = isTeacher ? teacherNav : studentNav
 

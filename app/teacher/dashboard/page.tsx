@@ -66,25 +66,22 @@ function StatCard({ label, value, icon, bg }: {
 }) {
   return (
     <div style={{
-      background: bg, borderRadius: 18, padding: '18px 20px', color: 'white',
+      background: bg, borderRadius: 18, padding: '18px 16px', color: 'white',
       display: 'flex', flexDirection: 'column', gap: 10,
-      minWidth: 140, flex: '0 0 auto',
       boxShadow: '0 4px 16px rgba(249,115,22,0.18)',
-      position: 'relative', overflow: 'hidden',
+      position: 'relative', overflow: 'hidden', width: '100%', boxSizing: 'border-box',
     }}>
-      {/* shine */}
       <div style={{ position:'absolute', top:0, right:0, width:60, height:60,
         background:'radial-gradient(circle at top right,rgba(255,255,255,0.2),transparent 65%)',
         pointerEvents:'none' }}/>
-      <div style={{
-        width: 36, height: 36, borderRadius: 10,
-        background: 'rgba(255,255,255,0.2)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>{icon}</div>
+      <div style={{ width:36, height:36, borderRadius:10,
+        background:'rgba(255,255,255,0.2)',
+        display:'flex', alignItems:'center', justifyContent:'center' }}>{icon}</div>
       <div>
-        <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-          letterSpacing: '0.07em', color: 'rgba(255,255,255,0.8)', marginBottom: 2 }}>{label}</p>
-        <p style={{ fontSize: 30, fontWeight: 900, lineHeight: 1 }}>{value}</p>
+        <p style={{ fontSize:10, fontWeight:700, textTransform:'uppercase',
+          letterSpacing:'0.07em', color:'rgba(255,255,255,0.8)', marginBottom:2,
+          overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{label}</p>
+        <p style={{ fontSize:28, fontWeight:900, lineHeight:1 }}>{value}</p>
       </div>
     </div>
   )
@@ -102,7 +99,7 @@ function Tab({ label, active, count, onClick, dataTut }: {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        padding: '9px 14px', borderRadius: 12, fontSize: 13, fontWeight: 700,
+        padding: '8px 6px', borderRadius: 10, fontSize: 12, fontWeight: 700,
         border: active ? 'none' : `1.5px solid ${hov ? '#F97316' : '#FFE4C4'}`,
         cursor: 'pointer',
         transition: 'all 0.18s cubic-bezier(0.34,1.2,0.64,1)',
@@ -110,23 +107,25 @@ function Tab({ label, active, count, onClick, dataTut }: {
           ? 'linear-gradient(135deg,#F97316,#FB923C)'
           : hov ? '#FFF3E8' : 'white',
         color: active ? 'white' : hov ? '#F97316' : '#78716C',
-        display: 'flex', alignItems: 'center', gap: 6,
-        flex: '1 1 auto', whiteSpace: 'nowrap',
-        justifyContent: 'center', minWidth: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+        width: '100%', whiteSpace: 'nowrap', overflow: 'hidden',
         boxShadow: active
-          ? '0 3px 12px rgba(249,115,22,0.35)'
-          : hov ? '0 2px 8px rgba(249,115,22,0.15)' : '0 1px 3px rgba(0,0,0,0.06)',
+          ? '0 3px 10px rgba(249,115,22,0.3)'
+          : hov ? '0 2px 6px rgba(249,115,22,0.12)' : '0 1px 3px rgba(0,0,0,0.06)',
         transform: hov && !active ? 'translateY(-1px)' : 'none',
       }}>
-      {label}
-      {count !== undefined && (
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+        {label}
+      </span>
+      {count !== undefined && count > 0 && (
         <span style={{
-          background: active ? 'rgba(255,255,255,0.25)' : hov ? '#F97316' : '#FEE2CC',
+          background: active ? 'rgba(255,255,255,0.3)' : hov ? '#F97316' : '#FEE2CC',
           color: active || hov ? 'white' : '#EA580C',
-          fontSize: 11, fontWeight: 800, padding: '1px 7px', borderRadius: 999,
-          minWidth: 20, textAlign: 'center',
+          fontSize: 10, fontWeight: 800,
+          padding: '1px 5px', borderRadius: 999,
+          minWidth: 16, textAlign: 'center', flexShrink: 0,
           transition: 'all 0.18s ease',
-        }}>{count}</span>
+        }}>{count > 99 ? '99+' : count}</span>
       )}
     </button>
   )
@@ -681,11 +680,12 @@ export default function TeacherDashboard() {
           </div>
         </div>
 
-        {/* ── Stat Cards — horizontal scroll on mobile ────── */}
+        {/* ── Stat Cards ───────────────────────────────────── */}
         <div data-tutorial="teacher-stats" style={{
-          display:'flex', gap:12, overflowX:'auto', paddingBottom:6,
-          scrollbarWidth:'none', WebkitOverflowScrolling:'touch',
-        }} className="hide-scrollbar">
+          display:'grid',
+          gridTemplateColumns:'repeat(2, 1fr)',
+          gap:12,
+        }}>
           <StatCard label="Total Students" value={stats.students}
             bg="linear-gradient(135deg,#F97316,#FB923C,#FDBA74)"
             icon={<svg style={{ width:20, height:20, color:'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>}
@@ -705,20 +705,18 @@ export default function TeacherDashboard() {
         </div>
 
         {/* ── Tabs ─────────────────────────────────────────── */}
+        <style>{`.hide-scrollbar::-webkit-scrollbar{display:none}`}</style>
         <div style={{
-          display:'flex', gap:6, overflowX:'auto', paddingBottom:2,
-          scrollbarWidth:'none', WebkitOverflowScrolling:'touch',
-        }} className="hide-scrollbar teacher-tabs">
-          <style>{`
-            .hide-scrollbar::-webkit-scrollbar{display:none}
-            @media(min-width:640px){.teacher-tabs>button{flex:1 1 0!important}}
-          `}</style>
+          display:'grid',
+          gridTemplateColumns:'repeat(4, 1fr)',
+          gap:6,
+        }} className="hide-scrollbar">
           <Tab label="Students"      active={activeTab==='students'}      count={students.length}          onClick={()=>setActiveTab('students')}      dataTut="students-tab" />
           <Tab label="Teachers"      active={activeTab==='teachers'}      count={teachers.length}          onClick={()=>setActiveTab('teachers')} />
           <Tab label="Narratives"    active={activeTab==='narratives'}    count={pendingNarratives.length} onClick={()=>setActiveTab('narratives')}    dataTut="narratives-tab" />
           <Tab label="Requirements"  active={activeTab==='requirements'}                                  onClick={()=>setActiveTab('requirements')}  dataTut="requirements-tab" />
           <Tab label="Announcements" active={activeTab==='announcements'} count={announcements.length}    onClick={()=>setActiveTab('announcements')} dataTut="announcements-tab" />
-          <Tab label="👥 All Users"  active={activeTab==='users'}                                         dataTut="all-users-tab"
+          <Tab label="All Users"     active={activeTab==='users'}                                         dataTut="all-users-tab"
             onClick={async () => {
               setActiveTab('users')
               if (!allUsers) {
