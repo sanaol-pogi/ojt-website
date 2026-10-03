@@ -615,7 +615,7 @@ export default function TeacherDashboard() {
 
   return (
     <AppShell forceTeacher>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%', boxSizing: 'border-box' }}>
 
         {/* ── Welcome Banner ──────────────────────────────── */}
         <div data-tutorial="teacher-banner" style={{
@@ -685,6 +685,8 @@ export default function TeacherDashboard() {
           display:'grid',
           gridTemplateColumns:'repeat(2, 1fr)',
           gap:12,
+          width:'100%',
+          boxSizing:'border-box',
         }}>
           <StatCard label="Total Students" value={stats.students}
             bg="linear-gradient(135deg,#F97316,#FB923C,#FDBA74)"
@@ -710,7 +712,9 @@ export default function TeacherDashboard() {
           display:'grid',
           gridTemplateColumns:'repeat(4, 1fr)',
           gap:6,
-        }} className="hide-scrollbar">
+          width:'100%',
+          boxSizing:'border-box',
+        }}>
           <Tab label="Students"      active={activeTab==='students'}      count={students.length}          onClick={()=>setActiveTab('students')}      dataTut="students-tab" />
           <Tab label="Teachers"      active={activeTab==='teachers'}      count={teachers.length}          onClick={()=>setActiveTab('teachers')} />
           <Tab label="Narratives"    active={activeTab==='narratives'}    count={pendingNarratives.length} onClick={()=>setActiveTab('narratives')}    dataTut="narratives-tab" />
@@ -728,7 +732,7 @@ export default function TeacherDashboard() {
                 finally { setUsersLoading(false) }
               }
             }} />
-          <Tab label={mySection ? `📚 ${mySection.name}` : '📚 My Section'} active={activeTab==='my-section'}
+          <Tab label={mySection ? mySection.name : 'My Section'} active={activeTab==='my-section'}
             onClick={() => {
               if (mySection) { router.push('/teacher/my-section') }
               else { setActiveTab('my-section') }

@@ -265,8 +265,8 @@ export default function Header({ strandCode, forceTeacher }: {
               ))}
             </nav>
 
-            {/* Spacer */}
-            <div style={{ flex: 1 }} className="header-spacer" />
+            {/* Spacer — only on desktop when nav has room */}
+            <div style={{ flex: '0 0 8px' }} className="header-spacer" />
 
             {/* Right side */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
