@@ -116,11 +116,6 @@ function LoginPageInner() {
     setError('')
   }
 
-  const handleCredentials = async (e: React.FormEvent) => {� NextAuth needs its own cookies intact for PKCE
-      await signIn('google', { callbackUrl, redirect: true, prompt: 'select_account' })
-    } catch { setError('An error occurred. Please try again.'); setLoading(false) }
-  }
-
   const handleCredentials = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true); setError('')
     try {
