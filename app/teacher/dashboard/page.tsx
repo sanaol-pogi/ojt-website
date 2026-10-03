@@ -17,7 +17,8 @@ interface Student {
 }
 interface Section {
   id: string; name: string
-  strand: { name: string }
+  strand: { id?: string; name: string }
+  teacher?: { id: string; name: string; email: string } | null
   students: Student[]
 }
 interface Teacher {
@@ -1618,7 +1619,7 @@ export default function TeacherDashboard() {
                     {sections.filter(s => s.id !== 'unassigned').map(s => (
                       <option key={s.id} value={s.id}>
                         {s.strand?.name ? `[${s.strand.name}] ` : ''}{s.name}
-                        {(s as { teacher?: { name: string } | null }).teacher?.name ? ` — ${(s as { teacher: { name: string } }).teacher.name}` : ''}
+                        {s.teacher?.name ? ` — ${s.teacher.name}` : ''}
                       </option>
                     ))}
                   </select>
