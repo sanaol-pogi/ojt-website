@@ -12,7 +12,7 @@ interface Narrative {
   isDraft: boolean; submissionDate?: string | null; submittedAt?: string | null
   photos: Photo[]
 }
-type Filter = 'all' | 'submitted' | 'draft'
+type Filter = 'all' | 'submitted' | 'draft' | 'pending' | 'approved' | 'revision'
 
 /* ─── Helpers ────────────────────────────────────────────── */
 function getTitle(content: string) {
@@ -120,9 +120,20 @@ export default function NarrativesPage() {
     all:       narratives.length,
     submitted: narratives.filter(n => !n.isDraft).length,
     draft:     narratives.filter(n =>  n.isDraft).length,
+    pending:   narratives.filter(n => !n.isDraft && n.status === 'pending').length,
+    approved:  narratives.filter(n => !n.isDraft && n.status === 'approved').length,
+    revision:  narratives.filter(n => !n.isDraft && n.status === 'revision_requested').length,
   }
   const filtered = narratives
-    .filter(n => filter === 'all' ? true : filter === 'draft' ? n.isDraft : !n.isDraft)
+    .filter(n => {
+      if (filter === 'all')       return true
+      if (filter === 'draft')     return n.isDraft
+      if (filter === 'submitted') return !n.isDraft
+      if (filter === 'pending')   return !n.isDraft && n.status === 'pending'
+      if (filter === 'approved')  return !n.isDraft && n.status === 'approved'
+      if (filter === 'revision')  return !n.isDraft && n.status === 'revision_requested'
+      return true
+    })
     .filter(n => {
       if (!search.trim()) return true
       const q = search.toLowerCase()
@@ -132,19 +143,23 @@ export default function NarrativesPage() {
     })
 
   /* ── Filter pill ──────────────────────────────────────── */
-  const FilterPill = ({ f, label }: { f: Filter; label: string }) => {
+  const FilterPill = ({ f, label, accent }: { f: Filter; label: string; accent?: string }) => {
     const active = filter === f
+    const color  = accent ?? '#F97316'
     return (
       <button onClick={() => setFilter(f)} style={{
-        padding: '7px 18px', borderRadius: 999, fontSize: 13, fontWeight: 700,
+        padding: '7px 16px', borderRadius: 999, fontSize: 13, fontWeight: 700,
         border: active ? 'none' : '1.5px solid #E5E7EB',
-        background: active ? '#F97316' : 'white',
+        background: active ? color : 'white',
         color: active ? 'white' : '#6B7280',
         cursor: 'pointer', fontFamily: 'inherit',
-        boxShadow: active ? '0 4px 12px rgba(249,115,22,0.3)' : 'none',
+        boxShadow: active ? `0 4px 12px ${color}4D` : 'none',
         transition: 'all 0.18s ease', transform: active ? 'scale(1.04)' : 'scale(1)',
       }}>
-        {label} <span style={{ opacity: 0.75, fontWeight: 600 }}>({counts[f]})</span>
+        {label}
+        {counts[f] > 0 && (
+          <span style={{ marginLeft: 5, opacity: 0.8, fontWeight: 600 }}>({counts[f]})</span>
+        )}
       </button>
     )
   }
@@ -273,6 +288,9 @@ export default function NarrativesPage() {
           {/* Filter pills */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <FilterPill f="all"       label="All" />
+            <FilterPill f="pending"   label="⏳ Pending"  accent="#F97316" />
+            <FilterPill f="approved"  label="✓ Approved"  accent="#10B981" />
+            <FilterPill f="revision"  label="↻ Revision"  accent="#8B5CF6" />
             <FilterPill f="submitted" label="Submitted" />
             <FilterPill f="draft"     label="Drafts" />
           </div>

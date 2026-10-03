@@ -218,7 +218,20 @@ export default function MySectionPage() {
     finally { setReqSubmitting(false) }
   }
 
-  if (loading || status === 'loading') return null
+  if (loading || status === 'loading') return (
+    <AppShell forceTeacher>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Banner skeleton */}
+        <div className="skeleton" style={{ height: 160, borderRadius: 20 }} />
+        {/* Tabs skeleton */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
+          {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{ height: 42, borderRadius: 12 }} />)}
+        </div>
+        {/* Content skeleton */}
+        <div className="skeleton" style={{ height: 300, borderRadius: 16 }} />
+      </div>
+    </AppShell>
+  )
 
   if (!section) return (
     <AppShell forceTeacher>

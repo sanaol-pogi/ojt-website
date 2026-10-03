@@ -243,9 +243,10 @@ export default function Header({ strandCode, forceTeacher }: {
               </div>
             </button>
 
-            {/* Desktop Nav — stretched across full available width */}
-            <nav style={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1,
-              overflowX: 'auto', minWidth: 0, scrollbarWidth: 'none', justifyContent: 'flex-start' }}
+            {/* Desktop Nav */}
+            <nav style={{ display: 'flex', alignItems: 'center', gap: 2,
+              overflowX: 'auto', minWidth: 0, scrollbarWidth: 'none',
+              flex: '1 1 0', maxWidth: 'calc(100% - 320px)' }}
               className="header-nav">
               {navItems.map(item => (
                 <NavLink
@@ -265,8 +266,8 @@ export default function Header({ strandCode, forceTeacher }: {
               ))}
             </nav>
 
-            {/* Spacer — only on desktop when nav has room */}
-            <div style={{ flex: '0 0 8px' }} className="header-spacer" />
+            {/* Spacer */}
+            <div style={{ flex: '1 1 0', minWidth: 8 }} className="header-spacer" />
 
             {/* Right side */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>

@@ -5,7 +5,8 @@ import { prisma } from '@/lib/prisma'
 
 /**
  * GET /api/teacher/my-section
- * Returns the section this teacher is assigned to + its students + pending narratives
+ * Returns the section this teacher is assigned to + students + pending narratives
+ * All queries run in parallel for speed.
  */
 export async function GET() {
   try {
@@ -20,18 +21,20 @@ export async function GET() {
     })
     if (!teacher) return NextResponse.json({ error: 'Teacher not found' }, { status: 404 })
 
-    // Get the section this teacher is assigned to
+    // Get assigned section first (lightweight query)
     const section = await prisma.section.findFirst({
       where: { teacherId: teacher.id },
-      include: {
+      select: {
+        id: true, name: true, gradeLevel: true, strandId: true,
         strand: { select: { id: true, name: true } },
         students: {
           select: {
             id: true, studentId: true, name: true, email: true,
             profilePicture: true,
             narratives: {
-              select: { id: true, status: true, submissionDate: true, isDraft: true, date: true },
+              select: { id: true, status: true, isDraft: true, date: true, submissionDate: true },
               orderBy: { submissionDate: 'desc' },
+              take: 20, // limit for speed
             },
           },
           orderBy: { name: 'asc' },
@@ -41,50 +44,61 @@ export async function GET() {
 
     if (!section) return NextResponse.json({ section: null })
 
-    // Pending narratives for this section's students
     const studentIds = section.students.map(s => s.id)
-    const pendingNarratives = await prisma.narrative.findMany({
-      where: { studentId: { in: studentIds }, status: 'pending', isDraft: false },
-      include: {
-        student: { select: { id: true, name: true, studentId: true, email: true } },
-        photos:  { select: { url: true, isVerified: true }, take: 1 },
-      },
-      orderBy: { submissionDate: 'desc' },
-    }).catch(() => [])
 
-    // Announcements posted to this section
-    const announcements = await prisma.announcement.findMany({
-      where: {
-        isActive: true,
-        OR: [
-          { targetType: 'all' },
-          { targetType: 'section',  sectionId: section.id },
-          { targetType: 'strand',   strandId:  section.strandId },
-        ],
-      },
-      include: { teacher: { select: { name: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    }).catch(() => [])
+    // Run remaining queries in parallel
+    const [pendingNarratives, announcements, checklists] = await Promise.all([
+      prisma.narrative.findMany({
+        where: { studentId: { in: studentIds }, status: 'pending', isDraft: false },
+        select: {
+          id: true, status: true, date: true, submissionDate: true,
+          student: { select: { id: true, name: true, studentId: true, email: true } },
+          photos:  { select: { url: true, isVerified: true }, where: { isVerified: true }, take: 1 },
+        },
+        orderBy: { submissionDate: 'desc' },
+        take: 50,
+      }).catch(() => []),
 
-    // Checklists for this section
-    const checklists = await prisma.checklist.findMany({
-      where: {
-        OR: [
-          { targetType: 'all' },
-          { targetType: 'section',  sectionId: section.id },
-          { targetType: 'strand',   strandId:  section.strandId },
-        ],
-      },
-      include: { items: true },
-      orderBy: { createdAt: 'desc' },
-    }).catch(() => [])
+      prisma.announcement.findMany({
+        where: {
+          isActive: true,
+          OR: [
+            { targetType: 'all' },
+            { targetType: 'section',  sectionId: section.id },
+            { targetType: 'strand',   strandId:  section.strandId },
+          ],
+        },
+        select: {
+          id: true, title: true, content: true, type: true,
+          targetType: true, createdAt: true,
+          teacher: { select: { name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }).catch(() => []),
+
+      prisma.checklist.findMany({
+        where: {
+          OR: [
+            { targetType: 'all' },
+            { targetType: 'section', sectionId: section.id },
+            { targetType: 'strand',  strandId:  section.strandId },
+          ],
+        },
+        select: {
+          id: true, name: true, description: true, targetType: true,
+          items: { select: { id: true, title: true, requirementType: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }).catch(() => []),
+    ])
 
     return NextResponse.json({
       section: {
         ...section,
-        studentCount:   section.students.length,
-        pendingCount:   pendingNarratives.length,
+        studentCount: section.students.length,
+        pendingCount: pendingNarratives.length,
       },
       pendingNarratives,
       announcements,
