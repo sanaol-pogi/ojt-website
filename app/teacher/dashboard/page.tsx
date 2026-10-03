@@ -753,7 +753,7 @@ export default function TeacherDashboard() {
                   <button key={tab.key} onClick={() => setSectionFilter(tab.key)} style={{
                     padding: '5px 14px', borderRadius: 999, fontSize: 12, fontWeight: 600,
                     border: 'none', cursor: 'pointer',
-                    background: sectionFilter === tab.key ? 'linear-gradient(135deg,#E8971F,#F5A623)' : '#F3F4F6',
+                    background: sectionFilter === tab.key ? 'linear-gradient(135deg,#F97316,#FB923C)' : '#F3F4F6',
                     color: sectionFilter === tab.key ? 'white' : '#4B5563',
                   }}>{tab.label}</button>
                 ))}

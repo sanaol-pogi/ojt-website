@@ -51,6 +51,10 @@ export async function GET(
     }
 
     const s = narrative.student
+    // SECURITY: escape all student fields injected into HTML
+    const esc = (v: string | null | undefined) =>
+      (v ?? '—').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+
     const submissionDateStr = narrative.submissionDate
       ? new Date(narrative.submissionDate).toLocaleDateString('en-US', {
           year: 'numeric', month: 'long', day: 'numeric',
@@ -63,9 +67,18 @@ export async function GET(
       year: 'numeric', month: 'long', day: 'numeric',
     })
 
-    // Format the content — convert markdown-style bold to HTML
+    // Format the content — HTML-escape first, then convert markdown bold to HTML
+    // SECURITY: escapeHtml prevents XSS from user-generated content
+    const escapeHtml = (str: string) =>
+      str
+        .replace(/&/g,  '&amp;')
+        .replace(/</g,  '&lt;')
+        .replace(/>/g,  '&gt;')
+        .replace(/"/g,  '&quot;')
+        .replace(/'/g,  '&#x27;')
+
     const formatContent = (text: string) =>
-      text
+      escapeHtml(text)
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         .replace(/\n\n/g, '</p><p>')
         .replace(/\n/g, '<br>')
@@ -86,7 +99,10 @@ export async function GET(
             // Extract MIME type and base64 data
             const mimeMatch = photo.url.match(/^data:([^;]+);base64,/)
             const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg'
+            // Validate MIME type — only allow image types to prevent script injection
+            const safeMime = /^image\/(jpeg|jpg|png|gif|webp)$/.test(mime) ? mime : 'image/jpeg'
             const b64 = photo.url.split(',')[1] ?? ''
+            // SECURITY: JSON.stringify safely escapes the base64 string — no quote injection
             return `
               <div class="section">
                 <h2 class="section-title">Verification Photo</h2>
@@ -99,8 +115,8 @@ export async function GET(
               <script>
                 (function(){
                   try {
-                    var b64='${b64}';
-                    var mime='${mime}';
+                    var b64=${JSON.stringify(b64)};
+                    var mime=${JSON.stringify(safeMime)};
                     var bin=atob(b64);
                     var arr=new Uint8Array(bin.length);
                     for(var i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
@@ -109,11 +125,10 @@ export async function GET(
                     var img=document.getElementById('verif-photo');
                     if(img){img.src=url;}
                   }catch(e){
-                    var img=document.getElementById('verif-photo');
-                    if(img){img.src='${photo.url}';}
+                    console.warn('Photo load failed', e);
                   }
                 })();
-              </script>`
+              <\/script>`
           }
           // Regular URL — just use it directly
           return `
@@ -133,7 +148,7 @@ export async function GET(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Work Immersion Narrative — ${s?.name ?? 'Student'}</title>
+  <title>Work Immersion Narrative — ${esc(s?.name)}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -236,31 +251,31 @@ export async function GET(
     <div class="info-grid">
       <div class="info-row">
         <span class="info-label">Student Name:</span>
-        <span class="info-value">${s?.name ?? '—'}</span>
+        <span class="info-value">${esc(s?.name)}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Student ID:</span>
-        <span class="info-value">${s?.studentId ?? '—'}</span>
+        <span class="info-value">${esc(s?.studentId)}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Grade Level:</span>
-        <span class="info-value">${s?.gradeLevel ? `Grade ${s.gradeLevel}` : '—'}</span>
+        <span class="info-value">${s?.gradeLevel ? `Grade ${Number(s.gradeLevel)}` : '—'}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Strand:</span>
-        <span class="info-value">${s?.strand?.name ?? '—'}</span>
+        <span class="info-value">${esc(s?.strand?.name)}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Section:</span>
-        <span class="info-value">${s?.section?.name ?? '—'}</span>
+        <span class="info-value">${esc(s?.section?.name)}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Company/Office:</span>
-        <span class="info-value">${s?.company ?? '—'}</span>
+        <span class="info-value">${esc(s?.company)}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Supervisor:</span>
-        <span class="info-value">${s?.supervisor?.name ?? '—'}</span>
+        <span class="info-value">${esc(s?.supervisor?.name)}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Activity Date:</span>
@@ -301,7 +316,7 @@ export async function GET(
 </body>
 </html>`
 
-    const filename = `Narrative_${s?.name?.replace(/\s+/g, '_') ?? 'Student'}_${narrativeDateStr.replace(/\s+/g, '_')}.html`
+    const filename = `Narrative_${(s?.name ?? 'Student').replace(/[^a-zA-Z0-9_\-]/g, '_')}_${narrativeDateStr.replace(/\s+/g, '_')}.html`
 
     return new NextResponse(html, {
       headers: {

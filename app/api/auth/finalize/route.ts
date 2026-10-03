@@ -58,13 +58,16 @@ export async function GET(request: NextRequest) {
       // Without this, a teacher who previously signed in as a student still shows up as a student
       const studentRecord = await prisma.student.findUnique({ where: { email } })
       if (studentRecord) {
-        // Clean up student-related records before deleting
-        await prisma.studentChecklistProgress.deleteMany({ where: { studentId: studentRecord.id } }).catch(() => {})
-        // Soft-delete/unlink narratives — we keep them for audit but unlink the student
-        // Actually delete them cascaded — schema has onDelete: Cascade
-        await prisma.narrative.deleteMany({ where: { studentId: studentRecord.id } }).catch(() => {})
-        await prisma.notification.deleteMany({ where: { userId: studentRecord.id, userType: 'student' } }).catch(() => {})
-        await prisma.student.delete({ where: { id: studentRecord.id } }).catch(() => {})
+        // Use $transaction so cleanup is atomic — no orphaned records on partial failure
+        await prisma.$transaction([
+          prisma.studentChecklistProgress.deleteMany({ where: { studentId: studentRecord.id } }),
+          prisma.narrative.deleteMany({ where: { studentId: studentRecord.id } }),
+          prisma.notification.deleteMany({ where: { userId: studentRecord.id, userType: 'student' } }),
+          prisma.student.delete({ where: { id: studentRecord.id } }),
+        ]).catch((err) => {
+          console.error('Teacher finalize: student cleanup transaction failed', err)
+          // Non-fatal — teacher record was already created, continue
+        })
       }
     } else {
       // ── STUDENT sign-in ───────────────────────────────────
@@ -88,14 +91,18 @@ export async function GET(request: NextRequest) {
       // Without this, having both records means JWT always picks "teacher"
       const teacherRecord = await prisma.teacher.findUnique({ where: { email } })
       if (teacherRecord) {
-        // Safely clean up teacher-related records before deleting
-        await prisma.student.updateMany({ where: { supervisorId: teacherRecord.id }, data: { supervisorId: null } }).catch(() => {})
-        await prisma.section.updateMany({ where: { teacherId: teacherRecord.id }, data: { teacherId: null } }).catch(() => {})
-        await prisma.narrativeReview.deleteMany({ where: { teacherId: teacherRecord.id } }).catch(() => {})
-        await prisma.notification.deleteMany({ where: { userId: teacherRecord.id, userType: 'teacher' } }).catch(() => {})
-        // Soft-delete announcements
-        await prisma.announcement.updateMany({ where: { teacherId: teacherRecord.id }, data: { isActive: false } }).catch(() => {})
-        await prisma.teacher.delete({ where: { id: teacherRecord.id } }).catch(() => {})
+        // Use $transaction so cleanup is atomic — no orphaned records on partial failure
+        await prisma.$transaction([
+          prisma.student.updateMany({ where: { supervisorId: teacherRecord.id }, data: { supervisorId: null } }),
+          prisma.section.updateMany({ where: { teacherId: teacherRecord.id }, data: { teacherId: null } }),
+          prisma.narrativeReview.deleteMany({ where: { teacherId: teacherRecord.id } }),
+          prisma.notification.deleteMany({ where: { userId: teacherRecord.id, userType: 'teacher' } }),
+          prisma.announcement.updateMany({ where: { teacherId: teacherRecord.id }, data: { isActive: false } }),
+          prisma.teacher.delete({ where: { id: teacherRecord.id } }),
+        ]).catch((err) => {
+          console.error('Student finalize: teacher cleanup transaction failed', err)
+          // Non-fatal — student record was already created, continue
+        })
       }
     }
 

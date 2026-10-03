@@ -222,21 +222,27 @@ export async function POST(request: NextRequest) {
       const students = await prisma.student.findMany({
         where: Object.keys(studentWhere).length > 0 ? studentWhere : undefined,
         select: { id: true },
+        take: 500, // Safety cap — prevent enormous createMany on very large schools
       })
 
       if (students.length > 0) {
-        await prisma.notification.createMany({
-          data: students.map(s => ({
-            userId:    s.id,
-            userType:  'student',
-            type:      'announcement',
-            title:     `📢 ${title}`,
-            message:   content.trim().slice(0, 160),
-            isRead:    false,
-            link:      '/announcements',
-          })),
-          skipDuplicates: true,
-        })
+        // Process in batches of 100 to avoid DB timeout
+        const BATCH = 100
+        for (let i = 0; i < students.length; i += BATCH) {
+          const batch = students.slice(i, i + BATCH)
+          await prisma.notification.createMany({
+            data: batch.map(s => ({
+              userId:    s.id,
+              userType:  'student',
+              type:      'announcement',
+              title:     `📢 ${title.trim().slice(0, 100)}`,
+              message:   content.trim().slice(0, 160),
+              isRead:    false,
+              link:      '/announcements',
+            })),
+            skipDuplicates: true,
+          })
+        }
       }
     } catch (notifErr) {
       // Non-fatal — announcement still created even if notifications fail
@@ -264,6 +270,17 @@ export async function DELETE(request: NextRequest) {
 
     const { id } = await request.json()
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
+
+    // SECURITY: verify this announcement belongs to the requesting teacher
+    const announcement = await prisma.announcement.findUnique({
+      where: { id }, select: { teacherId: true },
+    })
+    if (!announcement) {
+      return NextResponse.json({ error: 'Announcement not found' }, { status: 404 })
+    }
+    if (announcement.teacherId !== teacher.id) {
+      return NextResponse.json({ error: 'Forbidden — you can only delete your own announcements' }, { status: 403 })
+    }
 
     // Try soft-delete first (isActive=false), fall back to hard delete
     const softDeleted = await tryQuery(() =>

@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     const studentIdParam = searchParams.get('studentId')
     const statusParam    = searchParams.get('status')
     const page  = parseInt(searchParams.get('page')  || '1')
-    const limit = parseInt(searchParams.get('limit') || '20')
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100) // cap at 100
     const skip  = (page - 1) * limit
 
     const where: Record<string, unknown> = {}

@@ -19,14 +19,18 @@ export default function ChecklistPage() {
   const router = useRouter()
   const [checklists, setChecklists] = useState<Checklist[]>([])
   const [loading,    setLoading]    = useState(true)
+  const [apiError,   setApiError]   = useState('')
   const [updating,   setUpdating]   = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     fetch('/api/checklists/my-checklist')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Request failed (${r.status})`)
+        return r.json()
+      })
       .then(d => { if (!cancelled) { setChecklists(d.checklists ?? []); setLoading(false) } })
-      .catch(() => { if (!cancelled) setLoading(false) })
+      .catch((err) => { if (!cancelled) { setApiError(err instanceof Error ? err.message : 'Failed to load'); setLoading(false) } })
     return () => { cancelled = true }
   }, [])
 
@@ -87,6 +91,24 @@ export default function ChecklistPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 0' }}>
         <div style={{ width: 40, height: 40, border: '4px solid #FFEDD5',
           borderTopColor: '#F97316', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+      </div>
+    </AppShell>
+  )
+
+  if (apiError) return (
+    <AppShell>
+      <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
+        <p style={{ fontSize: 16, fontWeight: 700, color: '#374151', margin: '0 0 8px' }}>
+          Could not load your requirements
+        </p>
+        <p style={{ fontSize: 13, color: '#9CA3AF', margin: '0 0 20px' }}>{apiError}</p>
+        <button onClick={() => window.location.reload()}
+          style={{ padding: '10px 24px', background: 'linear-gradient(135deg,#F97316,#FB923C)',
+            color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700,
+            cursor: 'pointer' }}>
+          Try Again
+        </button>
       </div>
     </AppShell>
   )

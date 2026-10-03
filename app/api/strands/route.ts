@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 export async function GET() {
@@ -29,6 +31,18 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY: Only authenticated teachers may create strands
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const teacher = await prisma.teacher.findUnique({
+      where: { email: session.user.email }, select: { id: true },
+    })
+    if (!teacher) {
+      return NextResponse.json({ error: 'Forbidden — teacher access required' }, { status: 403 })
+    }
+
     const body = await request.json().catch(() => ({}))
     const { name, description } = body as { name?: string; description?: string }
 
