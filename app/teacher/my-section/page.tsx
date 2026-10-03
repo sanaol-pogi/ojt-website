@@ -95,6 +95,7 @@ export default function MySectionPage() {
   const [checklists, setChecklists] = useState<Checklist[]>([])
   const [activeTab, setActiveTab] = useState<ActiveTab>('students')
   const [search, setSearch]     = useState('')
+  const [unassigning, setUnassigning] = useState(false)
 
   // Announcement form
   const [annoForm, setAnnoForm] = useState({ title: '', content: '', type: 'reminder' })
@@ -128,6 +129,19 @@ export default function MySectionPage() {
     } catch { /* silent */ }
     finally { setLoading(false) }
   }, [])
+
+  const handleUnassign = async () => {
+    setUnassigning(true)
+    try {
+      await fetch('/api/teacher/sections/assign', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sectionId: null }),
+      })
+      router.push('/teacher/dashboard')
+    } catch { /* silent */ }
+    finally { setUnassigning(false) }
+  }
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
@@ -257,6 +271,24 @@ export default function MySectionPage() {
             backgroundImage: 'radial-gradient(circle, white 1.5px, transparent 1.5px)',
             backgroundSize: '20px 20px' }}/>
           <div style={{ position: 'relative' }}>
+            {/* Top row: back + unassign */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+              <button onClick={() => router.push('/teacher/dashboard')}
+                style={{ display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.3)',
+                  borderRadius: 8, padding: '6px 12px', color: 'white', fontSize: 12,
+                  fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                ← All Sections
+              </button>
+              <button onClick={handleUnassign} disabled={unassigning}
+                style={{ display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,200,200,0.3)',
+                  borderRadius: 8, padding: '6px 12px', color: 'rgba(255,220,220,0.9)', fontSize: 12,
+                  fontWeight: 600, cursor: unassigning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                {unassigning ? 'Unassigning...' : '✕ Unassign Me'}
+              </button>
+            </div>
             <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
               letterSpacing: '0.1em', color: 'rgba(255,255,255,0.7)', marginBottom: 4 }}>
               My Section Dashboard
@@ -289,10 +321,10 @@ export default function MySectionPage() {
         {/* ── Tabs ────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' }}
           className="hide-scrollbar teacher-tabs">
-          <Tab label="Students"     active={activeTab==='students'}     count={section.studentCount} onClick={() => setActiveTab('students')} />
-          <Tab label="Narratives"   active={activeTab==='narratives'}   count={pending.length}       onClick={() => setActiveTab('narratives')} />
+          <Tab label="Students"      active={activeTab==='students'}      count={section.studentCount} onClick={() => setActiveTab('students')} />
+          <Tab label="Narratives"    active={activeTab==='narratives'}    count={pending.length}       onClick={() => setActiveTab('narratives')} />
           <Tab label="Announcements" active={activeTab==='announcements'} count={announcements.length} onClick={() => setActiveTab('announcements')} />
-          <Tab label="Requirements" active={activeTab==='requirements'}                              onClick={() => setActiveTab('requirements')} />
+          <Tab label="Requirements"  active={activeTab==='requirements'}                              onClick={() => setActiveTab('requirements')} />
         </div>
 
         {/* ════ STUDENTS ════ */}

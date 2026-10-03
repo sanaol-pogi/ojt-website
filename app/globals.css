@@ -681,6 +681,12 @@ a, button {
   .login-mobile-logo { display: none !important; }
 }
 
+/* ─── Teacher tabs full-width on desktop ─────────────────── */
+@media (min-width: 640px) {
+  .teacher-tabs { flex-wrap: nowrap !important; }
+  .teacher-tabs > button { flex: 1 1 0 !important; min-width: 0 !important; font-size: 12px !important; padding: 9px 8px !important; }
+}
+
 /* ═══════════════════════════════════════════════════════════
    PREMIUM ANIMATION SYSTEM — OJT Work Immersion Portal
    Colorful · Smooth · Modern · Accessible
