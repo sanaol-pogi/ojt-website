@@ -107,8 +107,16 @@ function LoginPageInner() {
     try {
       const finalDest   = asTeacher ? '/teacher/dashboard' : '/dashboard'
       const callbackUrl = `/api/auth/finalize?intent=${asTeacher ? 'teacher' : 'student'}&next=${encodeURIComponent(finalDest)}`
-      // prompt=select_account shows Google account picker every time
-      // Do NOT clear cookies here � NextAuth needs its own cookies intact for PKCE
+      await signIn('google', { callbackUrl, redirect: true, prompt: 'select_account' })
+    } catch { setError('An error occurred. Please try again.'); setLoading(false) }
+  }
+
+  const handleCancelSignIn = () => {
+    setLoading(false)
+    setError('')
+  }
+
+  const handleCredentials = async (e: React.FormEvent) => {� NextAuth needs its own cookies intact for PKCE
       await signIn('google', { callbackUrl, redirect: true, prompt: 'select_account' })
     } catch { setError('An error occurred. Please try again.'); setLoading(false) }
   }
@@ -382,6 +390,14 @@ function LoginPageInner() {
                     }
                     {loading ? 'Signing in...' : 'Continue with Google'}
                   </button>
+                  {loading && (
+                    <button onClick={handleCancelSignIn}
+                      style={{ textAlign: 'center', fontSize: 13, color: '#9CA3AF', background: 'none',
+                        border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: '4px',
+                        textDecoration: 'underline' }}>
+                      Cancel
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -420,6 +436,14 @@ function LoginPageInner() {
                     }
                     {loading ? 'Signing in...' : 'Sign in with Google'}
                   </button>
+                  {loading && (
+                    <button onClick={handleCancelSignIn}
+                      style={{ textAlign: 'center', fontSize: 13, color: '#9CA3AF', background: 'none',
+                        border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: '4px',
+                        textDecoration: 'underline' }}>
+                      Cancel
+                    </button>
+                  )}
                 </div>
               )}
 

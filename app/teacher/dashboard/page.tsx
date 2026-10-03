@@ -93,25 +93,38 @@ function StatCard({ label, value, icon, bg }: {
 function Tab({ label, active, count, onClick, dataTut }: {
   label: string; active: boolean; count?: number; onClick: () => void; dataTut?: string
 }) {
+  const [hov, setHov] = useState(false)
   return (
-    <button onClick={onClick} data-tutorial={dataTut} style={{
-      padding: '9px 16px', borderRadius: 12, fontSize: 13, fontWeight: 700,
-      border: active ? 'none' : '1.5px solid #FFE4C4',
-      cursor: 'pointer', transition: 'all 0.2s ease',
-      background: active ? 'linear-gradient(135deg,#F97316,#FB923C)' : 'white',
-      color: active ? 'white' : '#78716C',
-      display: 'flex', alignItems: 'center', gap: 6,
-      flexShrink: 0, whiteSpace: 'nowrap', flex: '1 1 auto',
-      justifyContent: 'center',
-      boxShadow: active ? '0 3px 12px rgba(249,115,22,0.35)' : '0 1px 3px rgba(0,0,0,0.06)',
-    }}>
+    <button
+      onClick={onClick}
+      data-tutorial={dataTut}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        padding: '9px 14px', borderRadius: 12, fontSize: 13, fontWeight: 700,
+        border: active ? 'none' : `1.5px solid ${hov ? '#F97316' : '#FFE4C4'}`,
+        cursor: 'pointer',
+        transition: 'all 0.18s cubic-bezier(0.34,1.2,0.64,1)',
+        background: active
+          ? 'linear-gradient(135deg,#F97316,#FB923C)'
+          : hov ? '#FFF3E8' : 'white',
+        color: active ? 'white' : hov ? '#F97316' : '#78716C',
+        display: 'flex', alignItems: 'center', gap: 6,
+        flex: '1 1 auto', whiteSpace: 'nowrap',
+        justifyContent: 'center', minWidth: 0,
+        boxShadow: active
+          ? '0 3px 12px rgba(249,115,22,0.35)'
+          : hov ? '0 2px 8px rgba(249,115,22,0.15)' : '0 1px 3px rgba(0,0,0,0.06)',
+        transform: hov && !active ? 'translateY(-1px)' : 'none',
+      }}>
       {label}
       {count !== undefined && (
         <span style={{
-          background: active ? 'rgba(255,255,255,0.25)' : '#FEE2CC',
-          color: active ? 'white' : '#EA580C',
+          background: active ? 'rgba(255,255,255,0.25)' : hov ? '#F97316' : '#FEE2CC',
+          color: active || hov ? 'white' : '#EA580C',
           fontSize: 11, fontWeight: 800, padding: '1px 7px', borderRadius: 999,
           minWidth: 20, textAlign: 'center',
+          transition: 'all 0.18s ease',
         }}>{count}</span>
       )}
     </button>
@@ -173,7 +186,7 @@ function ConfirmModal({ title, body, confirmLabel = 'Confirm', danger = false,
 }
 
 /* ─── Page ───────────────────────────────────────────────── */
-type ActiveTab = 'students' | 'teachers' | 'announcements' | 'narratives' | 'requirements' | 'users'
+type ActiveTab = 'students' | 'teachers' | 'announcements' | 'narratives' | 'requirements' | 'users' | 'my-section'
 
 interface PendingNarrative {
   id: string; date: string; content: string; status: string
@@ -262,6 +275,11 @@ export default function TeacherDashboard() {
   const [deleteAllUserTeacher,    setDeleteAllUserTeacher]    = useState<AllUser | null>(null)
   const [deletingAllUserTeacher,  setDeletingAllUserTeacher]  = useState(false)
 
+  // My Section assignment
+  const [mySection,        setMySection]        = useState<{ id: string; name: string; strandName: string } | null>(null)
+  const [assigningSection, setAssigningSection] = useState(false)
+  const [sectionPickerId,  setSectionPickerId]  = useState('')
+
   /* ── Load all data ──────────────────────────────────────── */
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -328,6 +346,18 @@ export default function TeacherDashboard() {
       }
       if (secAnnoRes?.ok) {
         try { const d = await secAnnoRes.json(); setAnnoSections(d.sections ?? []) } catch { /* silent */ }
+      }
+
+      // Load teacher's assigned section
+      const mySectionRes = await fetch('/api/teacher/my-section').catch(() => null)
+      if (mySectionRes?.ok) {
+        try {
+          const d = await mySectionRes.json()
+          if (d.section) {
+            setMySection({ id: d.section.id, name: d.section.name, strandName: d.section.strand?.name ?? '' })
+            setSectionPickerId(d.section.id)
+          }
+        } catch { /* silent */ }
       }
     } catch (e) {
       console.error('loadData error', e)
@@ -434,6 +464,24 @@ export default function TeacherDashboard() {
     } finally {
       setDeletingAllUserTeacher(false)
     }
+  }
+
+  /* ── Assign teacher to section ─────────────────────────── */
+  const handleAssignSection = async () => {
+    setAssigningSection(true)
+    try {
+      const res = await fetch('/api/teacher/sections/assign', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sectionId: sectionPickerId || null }),
+      })
+      const d = await res.json()
+      if (res.ok) {
+        setMySection(d.section ?? null)
+        if (d.section) router.push('/teacher/my-section')
+      }
+    } catch { /* silent */ }
+    finally { setAssigningSection(false) }
   }
 
   /* ── Review narrative ───────────────────────────────────── */
@@ -657,11 +705,13 @@ export default function TeacherDashboard() {
 
         {/* ── Tabs ─────────────────────────────────────────── */}
         <div style={{
-          display:'flex', gap:8, overflowX:'auto', paddingBottom:2,
+          display:'flex', gap:6, overflowX:'auto', paddingBottom:2,
           scrollbarWidth:'none', WebkitOverflowScrolling:'touch',
-          flexWrap:'wrap',
-        }} className="hide-scrollbar">
-          <style>{`.hide-scrollbar::-webkit-scrollbar{display:none}`}</style>
+        }} className="hide-scrollbar teacher-tabs">
+          <style>{`
+            .hide-scrollbar::-webkit-scrollbar{display:none}
+            @media(min-width:640px){.teacher-tabs>button{flex:1 1 0!important}}
+          `}</style>
           <Tab label="Students"      active={activeTab==='students'}      count={students.length}          onClick={()=>setActiveTab('students')}      dataTut="students-tab" />
           <Tab label="Teachers"      active={activeTab==='teachers'}      count={teachers.length}          onClick={()=>setActiveTab('teachers')} />
           <Tab label="Narratives"    active={activeTab==='narratives'}    count={pendingNarratives.length} onClick={()=>setActiveTab('narratives')}    dataTut="narratives-tab" />
@@ -678,6 +728,11 @@ export default function TeacherDashboard() {
                 } catch { /* silent */ }
                 finally { setUsersLoading(false) }
               }
+            }} />
+          <Tab label={mySection ? `📚 ${mySection.name}` : '📚 My Section'} active={activeTab==='my-section'}
+            onClick={() => {
+              if (mySection) { router.push('/teacher/my-section') }
+              else { setActiveTab('my-section') }
             }} />
         </div>
 
@@ -1507,6 +1562,96 @@ export default function TeacherDashboard() {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════
+            MY SECTION TAB — assign yourself to a section
+        ════════════════════════════════════════════════ */}
+        {activeTab === 'my-section' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ background: 'white', border: '1px solid #FFE4C4', borderRadius: 20,
+              padding: '24px', boxShadow: '0 4px 16px rgba(249,115,22,0.08)' }}>
+              <div style={{ fontSize: 40, marginBottom: 12, textAlign: 'center' }}>🏫</div>
+              <h2 style={{ fontSize: 18, fontWeight: 900, color: '#1C1917', textAlign: 'center', marginBottom: 6 }}>
+                Assign Yourself to a Section
+              </h2>
+              <p style={{ fontSize: 13, color: '#78716C', textAlign: 'center', lineHeight: 1.6, marginBottom: 20, maxWidth: 400, margin: '0 auto 20px' }}>
+                Choose the section and strand you teach. You&apos;ll get a dedicated dashboard to manage that section — post announcements, create requirements, and review their narratives.
+              </p>
+
+              {mySection && (
+                <div style={{ background: '#FFF7ED', border: '1.5px solid #FED7AA', borderRadius: 14,
+                  padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center',
+                  justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <p style={{ fontWeight: 700, fontSize: 14, color: '#92400E', margin: '0 0 2px' }}>
+                      Currently assigned to:
+                    </p>
+                    <p style={{ fontSize: 16, fontWeight: 900, color: '#F97316', margin: 0 }}>
+                      {mySection.name} <span style={{ color: '#78716C', fontWeight: 500, fontSize: 13 }}>— {mySection.strandName}</span>
+                    </p>
+                  </div>
+                  <button onClick={() => router.push('/teacher/my-section')}
+                    style={{ padding: '9px 20px', background: 'linear-gradient(135deg,#F97316,#FB923C)',
+                      color: 'white', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                      cursor: 'pointer', boxShadow: '0 3px 10px rgba(249,115,22,0.3)', whiteSpace: 'nowrap' }}>
+                    Open My Section →
+                  </button>
+                </div>
+              )}
+
+              {/* Section picker */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#78716C',
+                    textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+                    Select Section
+                  </label>
+                  <select value={sectionPickerId}
+                    onChange={e => setSectionPickerId(e.target.value)}
+                    style={{ width: '100%', padding: '12px 16px', border: '1.5px solid #FFE4C4',
+                      borderRadius: 12, fontSize: 14, fontFamily: 'inherit', background: 'white',
+                      outline: 'none', color: '#1C1917', boxSizing: 'border-box', appearance: 'auto',
+                      cursor: 'pointer' }}>
+                    <option value="">— No Section (unassign) —</option>
+                    {sections.filter(s => s.id !== 'unassigned').map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.strand?.name ? `[${s.strand.name}] ` : ''}{s.name}
+                        {(s as { teacher?: { name: string } | null }).teacher?.name ? ` — ${(s as { teacher: { name: string } }).teacher.name}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button onClick={handleAssignSection} disabled={assigningSection}
+                  style={{ padding: '13px', background: assigningSection ? '#FDBA74' : 'linear-gradient(135deg,#F97316,#FB923C)',
+                    color: 'white', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 800,
+                    cursor: assigningSection ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 4px 14px rgba(249,115,22,0.3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  {assigningSection ? (
+                    <><div style={{ width: 16, height: 16, border: '3px solid rgba(255,255,255,0.4)',
+                      borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.9s linear infinite' }}/>Assigning...</>
+                  ) : sectionPickerId ? (
+                    <><span>📚</span> Assign Me to This Section</>
+                  ) : (
+                    <><span>❌</span> Remove My Section Assignment</>
+                  )}
+                </button>
+              </div>
+
+              <div style={{ marginTop: 20, padding: '14px 16px', background: '#F9FAFB', borderRadius: 12,
+                fontSize: 12, color: '#78716C', lineHeight: 1.7 }}>
+                <p style={{ fontWeight: 700, color: '#374151', margin: '0 0 4px' }}>What you get with a section:</p>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  <li>📢 Post announcements directly to your section&apos;s students</li>
+                  <li>✅ Create and track requirements for your section</li>
+                  <li>📖 Review narratives submitted by your section&apos;s students</li>
+                  <li>👥 See all students in your section at a glance</li>
+                </ul>
+              </div>
+            </div>
           </div>
         )}
 
