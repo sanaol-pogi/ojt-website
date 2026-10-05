@@ -31,7 +31,7 @@ export default function AppShell({ children, strandCode, forceTeacher, className
         flexDirection: 'column',
       }}>
         <Header strandCode={strandCode} forceTeacher={forceTeacher} />
-        <main style={{ flex: 1, width: '100%', overflowX: 'hidden' }} className={className}>
+        <main style={{ flex: 1, width: '100%', clipPath: 'inset(0)' }} className={className}>
           <div
             className="dashboard-container"
             style={{

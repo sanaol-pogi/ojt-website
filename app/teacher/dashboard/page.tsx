@@ -681,13 +681,7 @@ export default function TeacherDashboard() {
         </div>
 
         {/* ── Stat Cards ───────────────────────────────────── */}
-        <div data-tutorial="teacher-stats" style={{
-          display:'grid',
-          gridTemplateColumns:'repeat(2, 1fr)',
-          gap:12,
-          width:'100%',
-          boxSizing:'border-box',
-        }}>
+        <div data-tutorial="teacher-stats" className="stats-grid" style={{ width:'100%', boxSizing:'border-box' }}>
           <StatCard label="Total Students" value={stats.students}
             bg="linear-gradient(135deg,#F97316,#FB923C,#FDBA74)"
             icon={<svg style={{ width:20, height:20, color:'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>}
@@ -707,13 +701,8 @@ export default function TeacherDashboard() {
         </div>
 
         {/* ── Tabs ─────────────────────────────────────────── */}
-        <div style={{
-          display:'grid',
-          gridTemplateColumns:'repeat(4, minmax(0, 1fr))',
-          gap:6,
-          width:'100%',
-          boxSizing:'border-box',
-        }}>
+        <div style={{ gap:6, width:'100%', boxSizing:'border-box' }}
+          className="teacher-tab-bar">
           <Tab label="Students"      active={activeTab==='students'}      count={students.length}          onClick={()=>setActiveTab('students')}      dataTut="students-tab" />
           <Tab label="Teachers"      active={activeTab==='teachers'}      count={teachers.length}          onClick={()=>setActiveTab('teachers')} />
           <Tab label="Narratives"    active={activeTab==='narratives'}    count={pendingNarratives.length} onClick={()=>setActiveTab('narratives')}    dataTut="narratives-tab" />
