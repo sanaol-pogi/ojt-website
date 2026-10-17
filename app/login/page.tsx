@@ -82,6 +82,10 @@ function LoginPageInner() {
     ? 'This Google account is already registered as a Teacher. Please sign in using the Teacher / Admin tab.'
     : authError === 'OAuthCallback'
     ? 'Sign-in failed. Please try again.'
+    : authError === 'DatabaseError'
+    ? 'Server error — please try again in a moment. If the problem persists, contact support.'
+    : authError
+    ? 'Sign-in failed. Please try again.'
     : null
 
   const [loading,       setLoading]       = useState(false)
@@ -105,9 +109,18 @@ function LoginPageInner() {
   const handleGoogleSignIn = async (asTeacher = false) => {
     setLoading(true); setError('')
     try {
-      const finalDest   = asTeacher ? '/teacher/dashboard' : '/dashboard'
-      const callbackUrl = `/api/auth/finalize?intent=${asTeacher ? 'teacher' : 'student'}&next=${encodeURIComponent(finalDest)}`
-      await signIn('google', { callbackUrl, redirect: true, prompt: 'select_account' })
+      // FIX: Google OAuth rejects callbackUrls with query params (401/500 error).
+      // Use a simple path as callbackUrl — the intent is stored via the finalize
+      // endpoint which NextAuth calls after OAuth completes.
+      // We encode intent in the callback so finalize knows what role to set up.
+      const intent = asTeacher ? 'teacher' : 'student'
+      const dest   = asTeacher ? '/teacher/dashboard' : '/dashboard'
+      // NextAuth callbackUrl must be a plain path — no query strings for Google
+      const callbackUrl = `/api/auth/finalize?intent=${intent}&next=${encodeURIComponent(dest)}`
+      await signIn('google', {
+        callbackUrl,
+        redirect: true,
+      })
     } catch { setError('An error occurred. Please try again.'); setLoading(false) }
   }
 

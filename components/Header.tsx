@@ -96,20 +96,6 @@ export default function Header({ strandCode, forceTeacher }: {
   const [mobileNav,  setMobileNav]  = useState(false)
   const [activeTab,  setActiveTab]  = useState('')
   const [badges,     setBadges]     = useState<NavBadges>({ narratives: 0, requirements: 0, announcements: 0 })
-  const [installPrompt, setInstallPrompt] = useState<{ prompt: () => Promise<void> } | null>(null)
-  const [showInstall,   setShowInstall]   = useState(false)
-
-  // Capture PWA install prompt
-  useEffect(() => {
-    if (window.matchMedia('(display-mode: standalone)').matches) return
-    const handler = (e: Event) => {
-      e.preventDefault()
-      setInstallPrompt(e as unknown as { prompt: () => Promise<void> })
-      setShowInstall(true)
-    }
-    window.addEventListener('beforeinstallprompt', handler)
-    return () => window.removeEventListener('beforeinstallprompt', handler)
-  }, [])
 
   // Read ?tab= from URL safely on client only (avoids SSR crash)
   useEffect(() => {
@@ -282,34 +268,7 @@ export default function Header({ strandCode, forceTeacher }: {
                 </svg>
               </button>
 
-              {/* PWA Install button — only when installable */}
-              {showInstall && (
-                <button
-                  onClick={async () => {
-                    if (installPrompt) {
-                      await installPrompt.prompt()
-                      setShowInstall(false)
-                    }
-                  }}
-                  style={{
-                    background: 'rgba(255,255,255,0.22)',
-                    border: '1.5px solid rgba(255,255,255,0.5)',
-                    borderRadius: 10, padding: '7px 12px', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 6, color: 'white',
-                    fontSize: 12, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap',
-                    animation: 'badgePop 0.4s cubic-bezier(0.34,1.5,0.64,1) both',
-                  }}
-                  title="Install App"
-                >
-                  <svg style={{ width: 14, height: 14, flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                  </svg>
-                  Install
-                </button>
-              )}
-
-              {/* Share button */}
+              {/* Share button — icon only on mobile to save space */}
               <button
                 onClick={async () => {
                   const url   = window.location.href
@@ -483,25 +442,6 @@ export default function Header({ strandCode, forceTeacher }: {
                   </button>
                 )
               })}
-              {/* Install in mobile nav */}
-              {showInstall && (
-                <button
-                  onClick={async () => {
-                    setMobileNav(false)
-                    if (installPrompt) { await installPrompt.prompt(); setShowInstall(false) }
-                  }}
-                  style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.15)',
-                    border: '1.5px solid rgba(255,255,255,0.4)',
-                    borderRadius: 8, color: 'white', fontSize: 14, fontWeight: 700,
-                    cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-                    display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                  </svg>
-                  Install App
-                </button>
-              )}
               {/* Share in mobile nav */}
               <button
                 onClick={async () => {

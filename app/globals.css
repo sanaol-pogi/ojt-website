@@ -727,7 +727,13 @@ html, body { overflow-x: clip; max-width: 100vw; }
   .login-mobile-logo { display: none !important; }
 }
 
-/* ─── Teacher tabs full-width on desktop ─────────────────── */
+/* ─────────────────────────────────────────────────────────
+   NARRATIVE CREATE — step indicator mobile fix
+───────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .step-indicator-label { font-size: 9px !important; }
+  .step-indicator-circle { width: 26px !important; height: 26px !important; font-size: 11px !important; }
+}
 @media (min-width: 640px) {
   .teacher-tabs { flex-wrap: nowrap !important; }
   .teacher-tabs > button { flex: 1 1 0 !important; min-width: 0 !important; font-size: 12px !important; padding: 9px 8px !important; }

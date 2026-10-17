@@ -109,6 +109,12 @@ export async function GET(request: NextRequest) {
     return redirectTo(next)
   } catch (error) {
     console.error('finalize error:', error)
+    // Instead of silently redirecting (which can loop), show a proper error
+    const errMsg = error instanceof Error ? error.message : 'Unknown error'
+    // If it's a DB connection error, redirect to login with error param
+    if (errMsg.includes('connect') || errMsg.includes('prisma') || errMsg.includes('database')) {
+      return redirectTo('/login?error=DatabaseError')
+    }
     return redirectTo(next)
   }
 }
