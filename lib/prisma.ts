@@ -22,7 +22,7 @@ const connectionString = rawUrl
 
 const pool = new Pool({
   connectionString,
-  ssl: connectionString.includes('supabase.com') ? { rejectUnauthorized: false } : undefined,
+  ssl: { rejectUnauthorized: false },
 })
 const adapter = new PrismaPg(pool)
 
