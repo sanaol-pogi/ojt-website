@@ -368,7 +368,13 @@ export default function TeacherDashboard() {
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
-    else if (status === 'authenticated') void loadData()
+    else if (status === 'authenticated') {
+      // Ensure Teacher DB record exists before loading data.
+      // This is a fallback in case the signIn callback failed to create it.
+      fetch('/api/auth/ensure-teacher', { method: 'POST' })
+        .then(() => void loadData())
+        .catch(() => void loadData()) // load data even if ensure-teacher fails
+    }
   }, [status, loadData]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Filtered students ──────────────────────────────────── */
