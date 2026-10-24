@@ -109,11 +109,13 @@ function LoginPageInner() {
   const handleGoogleSignIn = async (asTeacher = false) => {
     setLoading(true); setError('')
     try {
-      const intent = asTeacher ? 'teacher' : 'student'
-      const dest   = asTeacher ? '/teacher/dashboard' : '/dashboard'
-      // Pass intent via the finalize route URL. Now that NEXTAUTH_URL is correct,
-      // NextAuth will properly validate this same-origin callbackUrl.
-      const callbackUrl = `/api/auth/finalize?intent=${intent}&next=${encodeURIComponent(dest)}`
+      // Intent is encoded in the PATH, not query params.
+      // NextAuth v4 strips query params from callbackUrl during the OAuth redirect,
+      // but preserves the full path — so /api/auth/finalize-teacher always arrives
+      // with the correct intent regardless of how NextAuth handles the URL.
+      const callbackUrl = asTeacher
+        ? '/api/auth/finalize-teacher'
+        : '/api/auth/finalize-student'
       await signIn('google', { callbackUrl, redirect: true })
     } catch { setError('An error occurred. Please try again.'); setLoading(false) }
   }
