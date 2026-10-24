@@ -4,17 +4,20 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 /**
- * GET /api/auth/finalize?intent=teacher|student&next=/...
+ * GET /api/auth/finalize?intent=teacher|student
  *
- * Called after Google OAuth completes (used as NextAuth callbackUrl).
- * Creates the correct DB record based on which tab the user signed in from.
+ * Called after Google OAuth completes (NextAuth callbackUrl).
+ *
+ * The same Gmail can sign in as teacher OR student by choosing the correct tab.
+ * We create the right DB record and delete the opposite one, then clear the
+ * JWT session cookie so the browser gets a fresh token with the correct role.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const intent = searchParams.get('intent') === 'teacher' ? 'teacher' : 'student'
-  const next   = searchParams.get('next') ?? (intent === 'teacher' ? '/teacher/dashboard' : '/dashboard')
+  const dest   = intent === 'teacher' ? '/teacher/dashboard' : '/dashboard'
+  const baseUrl = request.nextUrl.origin
 
-  const baseUrl    = request.nextUrl.origin
   const redirectTo = (path: string) => NextResponse.redirect(new URL(path, baseUrl))
 
   try {
@@ -26,11 +29,9 @@ export async function GET(request: NextRequest) {
     const image = session.user.image ?? null
 
     if (intent === 'teacher') {
-      // Block if already a student
-      const existingStudent = await prisma.student.findUnique({ where: { email }, select: { id: true } })
-      if (existingStudent) return redirectTo('/login?error=AlreadyStudent')
+      // Switch to teacher: remove student record so JWT re-reads as teacher
+      await prisma.student.deleteMany({ where: { email } })
 
-      // Upsert teacher record
       const existing = await prisma.teacher.findUnique({ where: { email } })
       if (!existing) {
         await prisma.teacher.create({
@@ -46,11 +47,9 @@ export async function GET(request: NextRequest) {
         await prisma.teacher.update({ where: { id: existing.id }, data: { profilePicture: image } })
       }
     } else {
-      // Block if already a teacher
-      const existingTeacher = await prisma.teacher.findUnique({ where: { email }, select: { id: true } })
-      if (existingTeacher) return redirectTo('/login?error=AlreadyTeacher')
+      // Switch to student: remove teacher record so JWT re-reads as student
+      await prisma.teacher.deleteMany({ where: { email } })
 
-      // Upsert student record
       const existing = await prisma.student.findUnique({ where: { email } })
       if (!existing) {
         await prisma.student.create({
@@ -61,7 +60,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return redirectTo(next)
+    // Clear the NextAuth session cookie so the JWT is re-issued fresh on the
+    // next request with the correct role from the DB record we just created.
+    const res = NextResponse.redirect(new URL(dest, baseUrl))
+    const secure = process.env.NEXTAUTH_URL?.startsWith('https') ?? true
+    const cookieName = secure ? '__Secure-next-auth.session-token' : 'next-auth.session-token'
+    res.cookies.set(cookieName, '', { path: '/', maxAge: 0, secure, httpOnly: true, sameSite: 'lax' })
+    return res
+
   } catch (error) {
     console.error('finalize error:', error)
     return redirectTo('/login?error=DatabaseError')

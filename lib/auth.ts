@@ -35,7 +35,6 @@ export const authOptions: NextAuthOptions = {
   ],
 
   callbacks: {
-    // Let all sign-ins through — role/record creation happens in /api/auth/finalize
     async signIn() {
       return true
     },
@@ -50,10 +49,13 @@ export const authOptions: NextAuthOptions = {
       const email = (user?.email ?? token.email) as string | undefined
       if (!email) return token
 
-      // Only hit the DB on first sign-in (when `user` is present); skip on every request
-      if (token.userId && !user) return token
+      // Always look up the DB on first sign-in.
+      // On subsequent requests, only re-check if role is unresolved.
+      // This means after finalize switches roles, the next page load picks it up.
+      if (token.role && token.role !== "pending" && !user) return token
 
       try {
+        // Teacher takes priority
         const teacher = await prisma.teacher.findUnique({
           where:  { email },
           select: { id: true, teacherId: true, name: true, profilePicture: true },
@@ -84,9 +86,9 @@ export const authOptions: NextAuthOptions = {
           return token
         }
 
-        // No DB record yet — finalize route will create it and the user will get
-        // redirected back through, at which point the jwt callback finds the record
-        token.role = "pending"
+        // No DB record yet — finalize will create it
+        token.role   = "pending"
+        token.userId = undefined
       } catch (err) {
         console.error("jwt error:", err)
       }
