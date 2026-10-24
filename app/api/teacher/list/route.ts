@@ -26,12 +26,14 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Auto-create Teacher record if missing (handles first-time teacher sign-in)
-    const teacher = await ensureTeacher(
-      session.user.email,
-      session.user.name,
-      session.user.image ?? null,
-    )
+    // Verify requester is actually a teacher (has a Teacher record in DB)
+    const requestingTeacher = await prisma.teacher.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    })
+    if (!requestingTeacher) {
+      return NextResponse.json({ error: 'Teacher access required' }, { status: 403 })
+    }
 
     const teachers = await prisma.teacher.findMany({
       select: {
@@ -42,9 +44,6 @@ export async function GET() {
       },
       orderBy: { name: 'asc' },
     })
-
-    // Suppress unused variable warning
-    void teacher
 
     return NextResponse.json({ teachers })
   } catch (error) {
