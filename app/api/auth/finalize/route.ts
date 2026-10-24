@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
   const dest   = intent === 'teacher' ? '/teacher/dashboard' : '/dashboard'
   const baseUrl = request.nextUrl.origin
 
+  // LOG: if this is still being hit, NextAuth is stripping the path and falling back here
+  console.log(`[finalize OLD] intent=${intent} full_url=${request.url}`)
+
   const redirectTo = (path: string) => NextResponse.redirect(new URL(path, baseUrl))
 
   try {

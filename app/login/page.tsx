@@ -109,13 +109,10 @@ function LoginPageInner() {
   const handleGoogleSignIn = async (asTeacher = false) => {
     setLoading(true); setError('')
     try {
-      // Intent is encoded in the PATH, not query params.
-      // NextAuth v4 strips query params from callbackUrl during the OAuth redirect,
-      // but preserves the full path — so /api/auth/finalize-teacher always arrives
-      // with the correct intent regardless of how NextAuth handles the URL.
       const callbackUrl = asTeacher
         ? '/api/auth/finalize-teacher'
         : '/api/auth/finalize-student'
+      console.log('[login] callbackUrl=', callbackUrl, 'asTeacher=', asTeacher)
       await signIn('google', { callbackUrl, redirect: true })
     } catch { setError('An error occurred. Please try again.'); setLoading(false) }
   }

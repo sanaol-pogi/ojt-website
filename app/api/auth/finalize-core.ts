@@ -18,6 +18,8 @@ export async function GET(request: NextRequest, intent: 'teacher' | 'student') {
   const dest    = intent === 'teacher' ? '/teacher/dashboard' : '/dashboard'
   const baseUrl = request.nextUrl.origin
 
+  console.log(`[finalize] intent=${intent} url=${request.url}`)
+
   const redirectTo = (path: string) => NextResponse.redirect(new URL(path, baseUrl))
 
   try {
