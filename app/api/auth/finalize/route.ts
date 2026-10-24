@@ -13,14 +13,35 @@ import { prisma } from '@/lib/prisma'
  *
  * This separation means one Gmail can be either a student OR a teacher,
  * switching roles cleanly by signing in on the correct tab.
+ *
+ * Intent resolution order (most reliable → fallback):
+ *   1. `login_intent` cookie set by the login page before OAuth starts
+ *   2. `intent` query param in the callbackUrl (may be stripped by NextAuth)
  */
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const intent = searchParams.get('intent') ?? 'student'
-  const next   = searchParams.get('next')   ?? (intent === 'teacher' ? '/teacher/dashboard' : '/dashboard')
+  // Read the httpOnly cookie set by POST /api/auth/set-intent just before OAuth started.
+  // This is the most reliable way to carry intent through the OAuth round-trip because:
+  //   - It's set server-side (httpOnly, SameSite=lax) before the redirect to Google
+  //   - Google redirects back to the same origin, so the browser sends the cookie
+  //   - NextAuth preserves all same-origin cookies through its callback redirect
+  // The cookie name matches what /api/auth/set-intent writes: 'signin_intent'
+  const cookieIntent = request.cookies.get('signin_intent')?.value
+
+  // Fall back to query param (legacy, may be stripped by NextAuth), then default student
+  const paramIntent = new URL(request.url).searchParams.get('intent')
+  const intent = (cookieIntent === 'teacher' || cookieIntent === 'student')
+    ? cookieIntent
+    : (paramIntent === 'teacher' ? 'teacher' : 'student')
+
+  const next = intent === 'teacher' ? '/teacher/dashboard' : '/dashboard'
 
   const baseUrl    = request.nextUrl.origin
-  const redirectTo = (path: string) => NextResponse.redirect(new URL(path, baseUrl))
+  const redirectTo = (path: string) => {
+    const res = NextResponse.redirect(new URL(path, baseUrl))
+    // Clear the intent cookie — it's single-use
+    res.cookies.set('signin_intent', '', { path: '/', maxAge: 0 })
+    return res
+  }
 
   try {
     const session = await getServerSession(authOptions)

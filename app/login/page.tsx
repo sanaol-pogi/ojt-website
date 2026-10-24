@@ -109,16 +109,21 @@ function LoginPageInner() {
   const handleGoogleSignIn = async (asTeacher = false) => {
     setLoading(true); setError('')
     try {
-      // FIX: Google OAuth rejects callbackUrls with query params (401/500 error).
-      // Use a simple path as callbackUrl — the intent is stored via the finalize
-      // endpoint which NextAuth calls after OAuth completes.
-      // We encode intent in the callback so finalize knows what role to set up.
       const intent = asTeacher ? 'teacher' : 'student'
-      const dest   = asTeacher ? '/teacher/dashboard' : '/dashboard'
-      // NextAuth callbackUrl must be a plain path — no query strings for Google
-      const callbackUrl = `/api/auth/finalize?intent=${intent}&next=${encodeURIComponent(dest)}`
+
+      // Step 1: Ask the server to set an httpOnly cookie with the intent.
+      // This survives the OAuth round-trip reliably, unlike query params in callbackUrl
+      // which NextAuth may strip or reject as unsafe.
+      await fetch('/api/auth/set-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intent }),
+      })
+
+      // Step 2: Start OAuth with a plain, query-param-free callbackUrl.
+      // NextAuth trusts simple same-origin paths; /api/auth/finalize reads the cookie.
       await signIn('google', {
-        callbackUrl,
+        callbackUrl: '/api/auth/finalize',
         redirect: true,
       })
     } catch { setError('An error occurred. Please try again.'); setLoading(false) }

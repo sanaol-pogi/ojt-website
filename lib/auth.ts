@@ -108,8 +108,12 @@ export const authOptions: NextAuthOptions = {
     },
   },
 
-  pages:   { signIn: "/login", error: "/auth-error" },
+  pages:   { signIn: "/login", error: "/login" },
   session: { strategy: "jwt", maxAge: 24 * 60 * 60 },
   secret:  process.env.NEXTAUTH_SECRET,
-  useSecureCookies: true,
+  // useSecureCookies: true breaks local dev (http://localhost) because the browser
+  // won't send Secure cookies over HTTP, so the session is lost after the OAuth
+  // callback and NextAuth returns OAuthCallback error.
+  // Let NextAuth auto-detect: it sets Secure only when NEXTAUTH_URL starts with https://
+  useSecureCookies: process.env.NEXTAUTH_URL?.startsWith('https://') ?? false,
 }
