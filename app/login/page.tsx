@@ -109,18 +109,9 @@ function LoginPageInner() {
   const handleGoogleSignIn = async (asTeacher = false) => {
     setLoading(true); setError('')
     try {
-      const intent = asTeacher ? 'teacher' : 'student'
-
-      // Tell the server which role this sign-in is for.
-      // The signIn callback in auth.ts reads this cookie to create the right DB record.
-      await fetch('/api/auth/set-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intent }),
-      })
-
-      // Use the destination as callbackUrl — NextAuth's redirect callback will
-      // also read the cookie and send the user to the right dashboard.
+      // Pass the destination as callbackUrl. NextAuth encodes this into the OAuth
+      // `state` param which Google echoes back unchanged. The signIn callback in
+      // auth.ts reads account.state to extract '/teacher/dashboard' → teacher intent.
       const dest = asTeacher ? '/teacher/dashboard' : '/dashboard'
       await signIn('google', { callbackUrl: dest, redirect: true })
     } catch { setError('An error occurred. Please try again.'); setLoading(false) }

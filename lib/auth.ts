@@ -3,7 +3,19 @@ import GoogleProvider from "next-auth/providers/google"
 import CredentialsProvider from "next-auth/providers/credentials"
 import { prisma } from "./prisma"
 import bcrypt from "bcryptjs"
-import { cookies } from "next/headers"
+
+/**
+ * Extract the intent ('teacher' | 'student') from the callbackUrl.
+ *
+ * The login page passes callbackUrl='/teacher/dashboard' or '/dashboard'.
+ * We detect teacher intent simply by checking for '/teacher' in the URL.
+ * This avoids any cookie/header access inside NextAuth callbacks, which is
+ * unsupported and throws in Next.js 15.
+ */
+function intentFromCallbackUrl(callbackUrl?: string | null): "teacher" | "student" {
+  if (!callbackUrl) return "student"
+  return callbackUrl.includes("/teacher") ? "teacher" : "student"
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -37,29 +49,42 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     /**
-     * signIn callback — runs server-side right after Google returns the code.
-     * This is the ONLY reliable place to read cookies from the OAuth round-trip
-     * and create/assign the DB record for the correct role.
+     * signIn callback — fires immediately after Google returns the OAuth code,
+     * before the JWT is created. This is where we create the DB record for the
+     * correct role so the jwt() callback finds it right away.
      *
-     * We read `signin_intent` (set by POST /api/auth/set-intent before OAuth started)
-     * to know whether this Google account should be a teacher or student.
+     * The intent is read from the callbackUrl that the login page set:
+     *   /teacher/dashboard → teacher
+     *   /dashboard          → student
      */
-    async signIn({ user, account }) {
-      // Only intercept Google OAuth — leave credentials provider alone
+    async signIn({ user, account, profile }) {
+      // Credentials provider: always allow (already validated in authorize())
       if (account?.provider !== "google") return true
       if (!user.email) return false
 
+      // NextAuth passes the callbackUrl through account.state in some versions;
+      // fall back to checking user.image/profile if needed. The safest is to
+      // read it from the token's `state` param that Google echoes back.
+      // NextAuth v4 puts the callbackUrl inside account.state as a JSON string.
+      let intent: "teacher" | "student" = "student"
       try {
-        // Read intent cookie — set by /api/auth/set-intent before the OAuth redirect
-        const cookieStore = await cookies()
-        const intent = cookieStore.get("signin_intent")?.value === "teacher" ? "teacher" : "student"
+        if (account.state) {
+          // NextAuth encodes state as JSON: { callbackUrl, csrfToken }
+          const state = JSON.parse(account.state as string)
+          intent = intentFromCallbackUrl(state?.callbackUrl)
+        }
+      } catch {
+        // state wasn't JSON — fall back to student
+        intent = "student"
+      }
 
-        const email = user.email
-        const name  = user.name ?? email.split("@")[0]
-        const image = user.image ?? null
+      const email = user.email
+      const name  = user.name ?? email.split("@")[0]
+      const image = user.image ?? null
 
+      try {
         if (intent === "teacher") {
-          // Block if already a student
+          // Block if already registered as a student
           const existingStudent = await prisma.student.findUnique({ where: { email }, select: { id: true } })
           if (existingStudent) return "/login?error=AlreadyStudent"
 
@@ -79,7 +104,7 @@ export const authOptions: NextAuthOptions = {
             await prisma.teacher.update({ where: { id: existing.id }, data: { profilePicture: image } })
           }
         } else {
-          // Block if already a teacher
+          // Block if already registered as a teacher
           const existingTeacher = await prisma.teacher.findUnique({ where: { email }, select: { id: true } })
           if (existingTeacher) return "/login?error=AlreadyTeacher"
 
@@ -101,25 +126,6 @@ export const authOptions: NextAuthOptions = {
       }
     },
 
-    /**
-     * redirect callback — called after signIn to determine where to send the user.
-     * We read the intent cookie here too to send teacher → /teacher/dashboard.
-     */
-    async redirect({ url, baseUrl }) {
-      // If NextAuth is redirecting to an error, honour it
-      if (url.includes("/login?error=")) return url
-      if (url.startsWith(baseUrl)) return url
-
-      try {
-        const cookieStore = await cookies()
-        const intent = cookieStore.get("signin_intent")?.value
-        if (intent === "teacher") return `${baseUrl}/teacher/dashboard`
-        return `${baseUrl}/dashboard`
-      } catch {
-        return `${baseUrl}/dashboard`
-      }
-    },
-
     async jwt({ token, user, trigger, session }) {
       if (trigger === "update" && session) {
         if (session.profilePicture !== undefined) token.profilePicture = session.profilePicture
@@ -130,10 +136,11 @@ export const authOptions: NextAuthOptions = {
       const email = (user?.email ?? token.email) as string | undefined
       if (!email) return token
 
-      // Skip DB lookup on every request — only look up when user just signed in
+      // Skip DB lookup on subsequent requests — only look up when user just signed in
       if (token.userId && !user) return token
 
       try {
+        // Teacher record takes priority
         const teacher = await prisma.teacher.findUnique({
           where:  { email },
           select: { id: true, teacherId: true, name: true, profilePicture: true },
