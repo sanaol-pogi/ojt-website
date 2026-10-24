@@ -204,7 +204,8 @@ export default function EditProfilePage() {
       // Refresh JWT so header name updates immediately
       await updateSession({ name: form.name.trim() }).catch(() => {})
       toast('Profile saved!', 'success')
-      setTimeout(() => router.push('/dashboard'), 1200)
+      const dest = session?.user?.role === 'teacher' ? '/teacher/dashboard' : '/dashboard'
+      setTimeout(() => router.push(dest), 1200)
     } catch (e: unknown) { toast(e instanceof Error ? e.message : 'Save failed', 'error') }
     finally { setSaving(false) }
   }
@@ -230,7 +231,7 @@ export default function EditProfilePage() {
         <div style={{ maxWidth: 620, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           {/* Back */}
-          <button onClick={() => router.push('/dashboard')} style={{
+          <button onClick={() => router.push(session?.user?.role === 'teacher' ? '/teacher/dashboard' : '/dashboard')} style={{
             display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#6B7280',
             background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit',
           }}>
@@ -457,7 +458,7 @@ export default function EditProfilePage() {
                     </>
                   ) : 'Save Changes'}
                 </button>
-                <button type="button" onClick={() => router.push('/dashboard')} disabled={saving}
+                <button type="button" onClick={() => router.push(session?.user?.role === 'teacher' ? '/teacher/dashboard' : '/dashboard')} disabled={saving}
                   style={{
                     flex: 1, padding: '14px', background: 'white', color: '#374151',
                     border: '2px solid #E5E7EB', borderRadius: 12, fontSize: 15,

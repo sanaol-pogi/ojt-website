@@ -81,10 +81,11 @@ export default function NarrativesPage() {
   const [deleteError, setDeleteError] = useState('')
   const [apiError,    setApiError]    = useState('')
 
-  // Teachers → redirect
+  // Teachers → redirect to their own dashboard (they have a dedicated view)
+  // But don't redirect if they navigated here intentionally via a student link
   useEffect(() => {
     if (status === 'authenticated' && session?.user?.role === 'teacher')
-      router.replace('/teacher/dashboard')
+      router.replace('/teacher/dashboard?tab=narratives')
   }, [status, session?.user?.role, router])
 
   const load = useCallback(() => {

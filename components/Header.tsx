@@ -135,10 +135,11 @@ export default function Header({ strandCode, forceTeacher }: {
 
   if (!session) return null
 
-  // isTeacher: use explicit prop, session role, OR current URL
+  // isTeacher: use explicit prop first, then session role.
+  // DO NOT use pathname — a teacher visiting /narratives/[id] to review a student's
+  // narrative should still see the teacher nav, not the student nav.
   const isTeacher = forceTeacher === true
     || session.user?.role === 'teacher'
-    || pathname.startsWith('/teacher')
   const dashPath  = isTeacher ? '/teacher/dashboard' : '/dashboard'
   const grad      = isTeacher
     ? STRAND_GRAD.TEACHER
