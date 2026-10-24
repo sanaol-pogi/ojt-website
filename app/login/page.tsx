@@ -109,11 +109,12 @@ function LoginPageInner() {
   const handleGoogleSignIn = async (asTeacher = false) => {
     setLoading(true); setError('')
     try {
-      // Pass the destination as callbackUrl. NextAuth encodes this into the OAuth
-      // `state` param which Google echoes back unchanged. The signIn callback in
-      // auth.ts reads account.state to extract '/teacher/dashboard' → teacher intent.
-      const dest = asTeacher ? '/teacher/dashboard' : '/dashboard'
-      await signIn('google', { callbackUrl: dest, redirect: true })
+      const intent = asTeacher ? 'teacher' : 'student'
+      const dest   = asTeacher ? '/teacher/dashboard' : '/dashboard'
+      // Pass intent via the finalize route URL. Now that NEXTAUTH_URL is correct,
+      // NextAuth will properly validate this same-origin callbackUrl.
+      const callbackUrl = `/api/auth/finalize?intent=${intent}&next=${encodeURIComponent(dest)}`
+      await signIn('google', { callbackUrl, redirect: true })
     } catch { setError('An error occurred. Please try again.'); setLoading(false) }
   }
 

@@ -4,19 +4,6 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import { prisma } from "./prisma"
 import bcrypt from "bcryptjs"
 
-/**
- * Extract the intent ('teacher' | 'student') from the callbackUrl.
- *
- * The login page passes callbackUrl='/teacher/dashboard' or '/dashboard'.
- * We detect teacher intent simply by checking for '/teacher' in the URL.
- * This avoids any cookie/header access inside NextAuth callbacks, which is
- * unsupported and throws in Next.js 15.
- */
-function intentFromCallbackUrl(callbackUrl?: string | null): "teacher" | "student" {
-  if (!callbackUrl) return "student"
-  return callbackUrl.includes("/teacher") ? "teacher" : "student"
-}
-
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
@@ -48,82 +35,9 @@ export const authOptions: NextAuthOptions = {
   ],
 
   callbacks: {
-    /**
-     * signIn callback — fires immediately after Google returns the OAuth code,
-     * before the JWT is created. This is where we create the DB record for the
-     * correct role so the jwt() callback finds it right away.
-     *
-     * The intent is read from the callbackUrl that the login page set:
-     *   /teacher/dashboard → teacher
-     *   /dashboard          → student
-     */
-    async signIn({ user, account, profile }) {
-      // Credentials provider: always allow (already validated in authorize())
-      if (account?.provider !== "google") return true
-      if (!user.email) return false
-
-      // NextAuth passes the callbackUrl through account.state in some versions;
-      // fall back to checking user.image/profile if needed. The safest is to
-      // read it from the token's `state` param that Google echoes back.
-      // NextAuth v4 puts the callbackUrl inside account.state as a JSON string.
-      let intent: "teacher" | "student" = "student"
-      try {
-        if (account.state) {
-          // NextAuth encodes state as JSON: { callbackUrl, csrfToken }
-          const state = JSON.parse(account.state as string)
-          intent = intentFromCallbackUrl(state?.callbackUrl)
-        }
-      } catch {
-        // state wasn't JSON — fall back to student
-        intent = "student"
-      }
-
-      const email = user.email
-      const name  = user.name ?? email.split("@")[0]
-      const image = user.image ?? null
-
-      try {
-        if (intent === "teacher") {
-          // Block if already registered as a student
-          const existingStudent = await prisma.student.findUnique({ where: { email }, select: { id: true } })
-          if (existingStudent) return "/login?error=AlreadyStudent"
-
-          // Upsert teacher record
-          const existing = await prisma.teacher.findUnique({ where: { email } })
-          if (!existing) {
-            await prisma.teacher.create({
-              data: {
-                email, name,
-                teacherId:      `TCH-${Date.now()}`,
-                role:           "teacher",
-                accessLevel:    "teacher",
-                profilePicture: image,
-              },
-            })
-          } else if (!existing.profilePicture && image) {
-            await prisma.teacher.update({ where: { id: existing.id }, data: { profilePicture: image } })
-          }
-        } else {
-          // Block if already registered as a teacher
-          const existingTeacher = await prisma.teacher.findUnique({ where: { email }, select: { id: true } })
-          if (existingTeacher) return "/login?error=AlreadyTeacher"
-
-          // Upsert student record
-          const existing = await prisma.student.findUnique({ where: { email } })
-          if (!existing) {
-            await prisma.student.create({
-              data: { email, name, studentId: `STU-${Date.now()}`, profilePicture: image },
-            })
-          } else if (!existing.profilePicture && image) {
-            await prisma.student.update({ where: { id: existing.id }, data: { profilePicture: image } })
-          }
-        }
-
-        return true
-      } catch (err) {
-        console.error("signIn callback error:", err)
-        return "/login?error=DatabaseError"
-      }
+    // Let all sign-ins through — role/record creation happens in /api/auth/finalize
+    async signIn() {
+      return true
     },
 
     async jwt({ token, user, trigger, session }) {
@@ -136,11 +50,10 @@ export const authOptions: NextAuthOptions = {
       const email = (user?.email ?? token.email) as string | undefined
       if (!email) return token
 
-      // Skip DB lookup on subsequent requests — only look up when user just signed in
+      // Only hit the DB on first sign-in (when `user` is present); skip on every request
       if (token.userId && !user) return token
 
       try {
-        // Teacher record takes priority
         const teacher = await prisma.teacher.findUnique({
           where:  { email },
           select: { id: true, teacherId: true, name: true, profilePicture: true },
@@ -171,6 +84,8 @@ export const authOptions: NextAuthOptions = {
           return token
         }
 
+        // No DB record yet — finalize route will create it and the user will get
+        // redirected back through, at which point the jwt callback finds the record
         token.role = "pending"
       } catch (err) {
         console.error("jwt error:", err)
