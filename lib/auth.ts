@@ -35,16 +35,69 @@ export const authOptions: NextAuthOptions = {
   ],
 
   callbacks: {
-    async signIn() {
-      return true
+    async signIn({ user, account }) {
+      // For Google OAuth: create the correct DB record RIGHT HERE based on
+      // which finalize route is in the callbackUrl (encoded in account.state).
+      // This runs before jwt(), so the token gets the right role immediately.
+      if (account?.provider !== "google" || !user.email) return true
+
+      try {
+        // NextAuth stores callbackUrl inside the state param as JSON
+        let intent: "teacher" | "student" = "student"
+        if (account.state) {
+          try {
+            const state = JSON.parse(account.state as string)
+            const cbUrl = state?.callbackUrl ?? ""
+            if (cbUrl.includes("finalize-teacher")) intent = "teacher"
+          } catch { /* state wasn't JSON, default to student */ }
+        }
+
+        const email = user.email
+        const name  = user.name  ?? email.split("@")[0]
+        const image = user.image ?? null
+
+        console.log(`[signIn] email=${email} intent=${intent} state=${account.state}`)
+
+        if (intent === "teacher") {
+          // Switch to teacher: remove student record, upsert teacher record
+          await prisma.student.deleteMany({ where: { email } })
+          const existing = await prisma.teacher.findUnique({ where: { email } })
+          if (!existing) {
+            await prisma.teacher.create({
+              data: {
+                email, name,
+                teacherId:   `TCH-${Date.now()}`,
+                role:        "teacher",
+                accessLevel: "teacher",
+                profilePicture: image,
+              },
+            })
+            console.log(`[signIn] created teacher for ${email}`)
+          }
+        } else {
+          // Switch to student: remove teacher record, upsert student record
+          await prisma.teacher.deleteMany({ where: { email } })
+          const existing = await prisma.student.findUnique({ where: { email } })
+          if (!existing) {
+            await prisma.student.create({
+              data: { email, name, studentId: `STU-${Date.now()}`, profilePicture: image },
+            })
+            console.log(`[signIn] created student for ${email}`)
+          }
+        }
+        return true
+      } catch (err) {
+        console.error("[signIn] error:", err)
+        return true // don't block sign-in even if DB fails
+      }
     },
 
     async jwt({ token, user, trigger, session }) {
       if (trigger === "update" && session) {
         if (session.profilePicture !== undefined) token.profilePicture = session.profilePicture
         if (session.name          !== undefined) token.name           = session.name
-        // If the client requests a role refresh, re-read from DB
         if (session.refreshRole) {
+          // Force re-read from DB on next request
           token.userId = undefined
           token.role   = "pending"
         }
@@ -54,13 +107,10 @@ export const authOptions: NextAuthOptions = {
       const email = (user?.email ?? token.email) as string | undefined
       if (!email) return token
 
-      // Always re-read from DB on sign-in (user present) or when role is unresolved.
-      // We intentionally do NOT cache the role long-term because the same Gmail
-      // can switch between teacher and student roles via the login tabs.
-      if (token.role && token.role !== 'pending' && token.userId && !user) return token
+      // Re-read from DB when: first sign-in (user present) OR role is unresolved
+      if (token.role && token.role !== "pending" && token.userId && !user) return token
 
       try {
-        // Teacher takes priority
         const teacher = await prisma.teacher.findUnique({
           where:  { email },
           select: { id: true, teacherId: true, name: true, profilePicture: true },
@@ -91,7 +141,6 @@ export const authOptions: NextAuthOptions = {
           return token
         }
 
-        // No DB record yet — finalize will create it
         token.role   = "pending"
         token.userId = undefined
       } catch (err) {
