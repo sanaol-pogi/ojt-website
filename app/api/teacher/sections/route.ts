@@ -3,23 +3,6 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-/** Find or auto-create a Teacher record for this email */
-async function ensureTeacher(email: string, name?: string | null, image?: string | null) {
-  const existing = await prisma.teacher.findUnique({ where: { email }, select: { id: true } })
-  if (existing) return existing
-  return prisma.teacher.create({
-    data: {
-      email,
-      name:           name ?? email.split('@')[0],
-      teacherId:      `TCH-${Date.now()}`,
-      role:           'teacher',
-      accessLevel:    'teacher',
-      profilePicture: image ?? null,
-    },
-    select: { id: true },
-  })
-}
-
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
@@ -27,52 +10,54 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Auto-create Teacher record if missing (first-time teacher sign-in)
-    await ensureTeacher(session.user.email, session.user.name, session.user.image ?? null)
-
-    // ALL students — exclude anyone who is also a teacher (dual-role cleanup safety net)
-    const teacherEmails = await prisma.teacher.findMany({
-      select: { email: true },
-    }).then(ts => ts.map(t => t.email)).catch(() => [] as string[])
-
-    const allStudents = await prisma.student.findMany({
-      where: teacherEmails.length > 0 ? { email: { notIn: teacherEmails } } : {},
-      select: {
-        id: true, studentId: true, name: true, email: true,
-        profilePicture: true, gradeLevel: true, sectionId: true,
-        section: { select: { name: true } },
-        strand:  { select: { name: true } },
-        narratives: {
-          select: { id: true, status: true, submissionDate: true, isDraft: true },
-          orderBy: { submissionDate: 'desc' },
-          take: 5,
-        },
-      },
-      orderBy: { name: 'asc' },
-    }).catch(() => [])
-
-    // Sections for filter tabs — get all sections (isActive may be NULL for old rows)
-    const sections = await prisma.section.findMany({
-      include: {
-        strand:  { select: { id: true, name: true } },
-        teacher: { select: { id: true, name: true, email: true } },
-        students: {
-          select: {
-            id: true, studentId: true, name: true, email: true,
-            profilePicture: true, gradeLevel: true, sectionId: true,
-            section: { select: { name: true } },
-            strand:  { select: { name: true } },
-            narratives: {
-              select: { id: true, status: true, submissionDate: true, isDraft: true },
-              orderBy: { submissionDate: 'desc' },
-              take: 5,
-            },
+    // Run all queries in parallel — no sequential awaits
+    const [allStudents, sections, pendingNarratives] = await Promise.all([
+      // Fetch ALL students — no email exclusion filter.
+      // The signIn callback now guarantees that a single email can only exist
+      // in either the Student table OR the Teacher table, never both.
+      // Filtering by teacher emails was hiding students who had a dual-role
+      // due to previous bugs; that exclusion is no longer needed.
+      prisma.student.findMany({
+        select: {
+          id: true, studentId: true, name: true, email: true,
+          profilePicture: true, gradeLevel: true, sectionId: true,
+          section: { select: { name: true } },
+          strand:  { select: { name: true } },
+          narratives: {
+            select: { id: true, status: true, submissionDate: true, isDraft: true },
+            orderBy: { submissionDate: 'desc' },
+            take: 5,
           },
-          orderBy: { name: 'asc' },
         },
-      },
-      orderBy: [{ strand: { name: 'asc' } }, { name: 'asc' }],
-    }).catch(() => [])
+        orderBy: { name: 'asc' },
+      }),
+
+      prisma.section.findMany({
+        include: {
+          strand:  { select: { id: true, name: true } },
+          teacher: { select: { id: true, name: true, email: true } },
+          students: {
+            select: {
+              id: true, studentId: true, name: true, email: true,
+              profilePicture: true, gradeLevel: true, sectionId: true,
+              section: { select: { name: true } },
+              strand:  { select: { name: true } },
+              narratives: {
+                select: { id: true, status: true, submissionDate: true, isDraft: true },
+                orderBy: { submissionDate: 'desc' },
+                take: 5,
+              },
+            },
+            orderBy: { name: 'asc' },
+          },
+        },
+        orderBy: [{ strand: { name: 'asc' } }, { name: 'asc' }],
+      }),
+
+      prisma.narrative.count({
+        where: { status: 'pending', isDraft: false },
+      }).catch(() => 0),
+    ])
 
     // Virtual "Unassigned" section for students with no section
     const unassigned = allStudents.filter(s => !s.sectionId)
@@ -87,13 +72,6 @@ export async function GET() {
         students: unassigned,
       }] : []),
     ]
-
-    let pendingNarratives = 0
-    try {
-      pendingNarratives = await prisma.narrative.count({
-        where: { status: 'pending', isDraft: false },
-      })
-    } catch { /* column may not exist */ }
 
     return NextResponse.json({
       sections:    allSections,

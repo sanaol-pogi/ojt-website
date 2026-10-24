@@ -31,7 +31,7 @@ export default function HelpButton() {
 
   const teacherItems = [
     { icon: '🏠', label: 'Dashboard',             path: '/teacher/dashboard' },
-    { icon: '👨‍🎓', label: 'View Students',         path: '/teacher/dashboard?tab=students' },
+    { icon: '👤', label: 'View Students',         path: '/teacher/dashboard?tab=students' },
     { icon: '📖', label: 'Review Narratives',     path: '/teacher/dashboard?tab=narratives' },
     { icon: '📢', label: 'Announcements',         path: '/teacher/dashboard?tab=announcements' },
     { icon: '⚙️', label: 'Teacher Profile',       path: '/teacher/profile' },

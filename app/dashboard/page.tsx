@@ -44,9 +44,9 @@ function getGreeting() {
 }
 function getGreetingEmoji() {
   const h = new Date().getHours()
-  if (h < 12) return '☀️'
-  if (h < 17) return '🌤️'
-  return '🌙'
+  if (h < 12) return '\u2600\uFE0F'  // ☀ sun (single codepoint)
+  if (h < 17) return '\u26C5'         // ⛅ (single codepoint)
+  return '\uD83C\uDF19'               // 🌙 crescent moon
 }
 
 /* ─── Avatar ─────────────────────────────────────────────── */

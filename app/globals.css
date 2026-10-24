@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* Ensure emoji render correctly on all platforms including Windows */
+@font-face {
+  font-family: 'EmojiFont';
+  src: local('Segoe UI Emoji'), local('Apple Color Emoji'), local('Noto Color Emoji');
+  unicode-range: U+1F000-1FFFF, U+2600-27BF, U+FE0F;
+}
+
+body, * {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Segoe UI Emoji",
+    "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+}
+
 /* ─────────────────────────────────────────────────────────
    DESIGN SYSTEM — OJT Work Immersion Portal
    Strand themes: STEM | ABM | HUMSS | TVL

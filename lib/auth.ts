@@ -35,81 +35,90 @@ export const authOptions: NextAuthOptions = {
   ],
 
   callbacks: {
+    /**
+     * signIn — fires immediately after Google authenticates the user.
+     * Reads the callbackUrl from account.state to detect intent, then
+     * creates the correct DB record BEFORE jwt() runs so the token gets
+     * the right role on the very first request.
+     */
     async signIn({ user, account }) {
-      // For Google OAuth: create the correct DB record RIGHT HERE based on
-      // which finalize route is in the callbackUrl (encoded in account.state).
-      // This runs before jwt(), so the token gets the right role immediately.
       if (account?.provider !== "google" || !user.email) return true
 
       try {
-        // NextAuth stores callbackUrl inside the state param as JSON
         let intent: "teacher" | "student" = "student"
+
+        // NextAuth encodes callbackUrl into the OAuth state as JSON
         if (account.state) {
           try {
-            const state = JSON.parse(account.state as string)
-            const cbUrl = state?.callbackUrl ?? ""
+            const parsed = JSON.parse(account.state as string)
+            const cbUrl  = (parsed?.callbackUrl ?? "") as string
             if (cbUrl.includes("finalize-teacher")) intent = "teacher"
-          } catch { /* state wasn't JSON, default to student */ }
+          } catch { /* state was not JSON — default to student */ }
         }
 
         const email = user.email
         const name  = user.name  ?? email.split("@")[0]
         const image = user.image ?? null
 
-        console.log(`[signIn] email=${email} intent=${intent} state=${account.state}`)
-
         if (intent === "teacher") {
-          // Switch to teacher: remove student record, upsert teacher record
+          // Remove any student record for this email, then upsert teacher
           await prisma.student.deleteMany({ where: { email } })
           const existing = await prisma.teacher.findUnique({ where: { email } })
           if (!existing) {
             await prisma.teacher.create({
               data: {
                 email, name,
-                teacherId:   `TCH-${Date.now()}`,
-                role:        "teacher",
-                accessLevel: "teacher",
+                teacherId:      `TCH-${Date.now()}`,
+                role:           "teacher",
+                accessLevel:    "teacher",
                 profilePicture: image,
               },
             })
-            console.log(`[signIn] created teacher for ${email}`)
+          } else if (!existing.profilePicture && image) {
+            await prisma.teacher.update({ where: { id: existing.id }, data: { profilePicture: image } })
           }
         } else {
-          // Switch to student: remove teacher record, upsert student record
+          // Remove any teacher record for this email, then upsert student
           await prisma.teacher.deleteMany({ where: { email } })
           const existing = await prisma.student.findUnique({ where: { email } })
           if (!existing) {
             await prisma.student.create({
               data: { email, name, studentId: `STU-${Date.now()}`, profilePicture: image },
             })
-            console.log(`[signIn] created student for ${email}`)
+          } else if (!existing.profilePicture && image) {
+            await prisma.student.update({ where: { id: existing.id }, data: { profilePicture: image } })
           }
         }
+
         return true
       } catch (err) {
-        console.error("[signIn] error:", err)
+        console.error("[signIn] DB error:", err)
         return true // don't block sign-in even if DB fails
       }
     },
 
+    /**
+     * jwt — called on every request that needs a session token.
+     * We only hit the DB on:
+     *   1. First sign-in (user object is present)
+     *   2. Role is unresolved ("pending" or missing)
+     * All other requests return the cached token immediately — no DB hit.
+     */
     async jwt({ token, user, trigger, session }) {
+      // Handle session.update() calls (e.g. profile picture/name changes)
       if (trigger === "update" && session) {
         if (session.profilePicture !== undefined) token.profilePicture = session.profilePicture
         if (session.name          !== undefined) token.name           = session.name
-        if (session.refreshRole) {
-          // Force re-read from DB on next request
-          token.userId = undefined
-          token.role   = "pending"
-        }
         return token
       }
 
       const email = (user?.email ?? token.email) as string | undefined
       if (!email) return token
 
-      // Re-read from DB when: first sign-in (user present) OR role is unresolved
+      // Cache hit: role is resolved and this is not the initial sign-in
       if (token.role && token.role !== "pending" && token.userId && !user) return token
 
+      // DB lookup: runs only on first sign-in or when role is unresolved
       try {
         const teacher = await prisma.teacher.findUnique({
           where:  { email },
@@ -141,6 +150,7 @@ export const authOptions: NextAuthOptions = {
           return token
         }
 
+        // No DB record yet
         token.role   = "pending"
         token.userId = undefined
       } catch (err) {
