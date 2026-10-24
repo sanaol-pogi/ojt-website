@@ -111,21 +111,18 @@ function LoginPageInner() {
     try {
       const intent = asTeacher ? 'teacher' : 'student'
 
-      // Step 1: Ask the server to set an httpOnly cookie with the intent.
-      // This survives the OAuth round-trip reliably, unlike query params in callbackUrl
-      // which NextAuth may strip or reject as unsafe.
+      // Tell the server which role this sign-in is for.
+      // The signIn callback in auth.ts reads this cookie to create the right DB record.
       await fetch('/api/auth/set-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ intent }),
       })
 
-      // Step 2: Start OAuth with a plain, query-param-free callbackUrl.
-      // NextAuth trusts simple same-origin paths; /api/auth/finalize reads the cookie.
-      await signIn('google', {
-        callbackUrl: '/api/auth/finalize',
-        redirect: true,
-      })
+      // Use the destination as callbackUrl — NextAuth's redirect callback will
+      // also read the cookie and send the user to the right dashboard.
+      const dest = asTeacher ? '/teacher/dashboard' : '/dashboard'
+      await signIn('google', { callbackUrl: dest, redirect: true })
     } catch { setError('An error occurred. Please try again.'); setLoading(false) }
   }
 

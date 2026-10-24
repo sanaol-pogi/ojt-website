@@ -3,6 +3,7 @@ import GoogleProvider from "next-auth/providers/google"
 import CredentialsProvider from "next-auth/providers/credentials"
 import { prisma } from "./prisma"
 import bcrypt from "bcryptjs"
+import { cookies } from "next/headers"
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -35,9 +36,88 @@ export const authOptions: NextAuthOptions = {
   ],
 
   callbacks: {
-    // signIn: just allow everyone through — record creation happens in /api/auth/finalize
-    async signIn({ user }) {
-      return true
+    /**
+     * signIn callback — runs server-side right after Google returns the code.
+     * This is the ONLY reliable place to read cookies from the OAuth round-trip
+     * and create/assign the DB record for the correct role.
+     *
+     * We read `signin_intent` (set by POST /api/auth/set-intent before OAuth started)
+     * to know whether this Google account should be a teacher or student.
+     */
+    async signIn({ user, account }) {
+      // Only intercept Google OAuth — leave credentials provider alone
+      if (account?.provider !== "google") return true
+      if (!user.email) return false
+
+      try {
+        // Read intent cookie — set by /api/auth/set-intent before the OAuth redirect
+        const cookieStore = await cookies()
+        const intent = cookieStore.get("signin_intent")?.value === "teacher" ? "teacher" : "student"
+
+        const email = user.email
+        const name  = user.name ?? email.split("@")[0]
+        const image = user.image ?? null
+
+        if (intent === "teacher") {
+          // Block if already a student
+          const existingStudent = await prisma.student.findUnique({ where: { email }, select: { id: true } })
+          if (existingStudent) return "/login?error=AlreadyStudent"
+
+          // Upsert teacher record
+          const existing = await prisma.teacher.findUnique({ where: { email } })
+          if (!existing) {
+            await prisma.teacher.create({
+              data: {
+                email, name,
+                teacherId:      `TCH-${Date.now()}`,
+                role:           "teacher",
+                accessLevel:    "teacher",
+                profilePicture: image,
+              },
+            })
+          } else if (!existing.profilePicture && image) {
+            await prisma.teacher.update({ where: { id: existing.id }, data: { profilePicture: image } })
+          }
+        } else {
+          // Block if already a teacher
+          const existingTeacher = await prisma.teacher.findUnique({ where: { email }, select: { id: true } })
+          if (existingTeacher) return "/login?error=AlreadyTeacher"
+
+          // Upsert student record
+          const existing = await prisma.student.findUnique({ where: { email } })
+          if (!existing) {
+            await prisma.student.create({
+              data: { email, name, studentId: `STU-${Date.now()}`, profilePicture: image },
+            })
+          } else if (!existing.profilePicture && image) {
+            await prisma.student.update({ where: { id: existing.id }, data: { profilePicture: image } })
+          }
+        }
+
+        return true
+      } catch (err) {
+        console.error("signIn callback error:", err)
+        return "/login?error=DatabaseError"
+      }
+    },
+
+    /**
+     * redirect callback — called after signIn to determine where to send the user.
+     * We read the intent cookie here too to send teacher → /teacher/dashboard.
+     */
+    async redirect({ url, baseUrl }) {
+      // If NextAuth is redirecting to an error, honour it
+      if (url.includes("/login?error=")) return url
+      if (url.startsWith(baseUrl)) return url
+
+      try {
+        const cookieStore = await cookies()
+        const intent = cookieStore.get("signin_intent")?.value
+        if (intent === "teacher") return `${baseUrl}/teacher/dashboard`
+        return `${baseUrl}/dashboard`
+      } catch {
+        return `${baseUrl}/dashboard`
+      }
     },
 
     async jwt({ token, user, trigger, session }) {
@@ -50,12 +130,10 @@ export const authOptions: NextAuthOptions = {
       const email = (user?.email ?? token.email) as string | undefined
       if (!email) return token
 
-      // Avoid re-fetching on every request — only look up DB when user just signed in
-      // token.userId is set after first lookup; skip DB on subsequent requests
+      // Skip DB lookup on every request — only look up when user just signed in
       if (token.userId && !user) return token
 
       try {
-        // Teacher takes priority — if a Teacher record exists, they are a teacher
         const teacher = await prisma.teacher.findUnique({
           where:  { email },
           select: { id: true, teacherId: true, name: true, profilePicture: true },
@@ -86,7 +164,6 @@ export const authOptions: NextAuthOptions = {
           return token
         }
 
-        // No DB record yet — will be created by /api/auth/finalize
         token.role = "pending"
       } catch (err) {
         console.error("jwt error:", err)
@@ -111,9 +188,4 @@ export const authOptions: NextAuthOptions = {
   pages:   { signIn: "/login", error: "/login" },
   session: { strategy: "jwt", maxAge: 24 * 60 * 60 },
   secret:  process.env.NEXTAUTH_SECRET,
-  // useSecureCookies: true breaks local dev (http://localhost) because the browser
-  // won't send Secure cookies over HTTP, so the session is lost after the OAuth
-  // callback and NextAuth returns OAuthCallback error.
-  // Let NextAuth auto-detect: it sets Secure only when NEXTAUTH_URL starts with https://
-  useSecureCookies: process.env.NEXTAUTH_URL?.startsWith('https://') ?? false,
 }
