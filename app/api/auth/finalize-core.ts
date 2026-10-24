@@ -32,6 +32,7 @@ export async function GET(request: NextRequest, intent: 'teacher' | 'student') {
 
     if (intent === 'teacher') {
       await prisma.student.deleteMany({ where: { email } })
+      console.log(`[finalize] deleted student records for ${email}`)
 
       const existing = await prisma.teacher.findUnique({ where: { email } })
       if (!existing) {
@@ -44,19 +45,28 @@ export async function GET(request: NextRequest, intent: 'teacher' | 'student') {
             profilePicture: image,
           },
         })
-      } else if (!existing.profilePicture && image) {
-        await prisma.teacher.update({ where: { id: existing.id }, data: { profilePicture: image } })
+        console.log(`[finalize] created teacher record for ${email}`)
+      } else {
+        console.log(`[finalize] teacher record already exists for ${email}`)
+        if (!existing.profilePicture && image) {
+          await prisma.teacher.update({ where: { id: existing.id }, data: { profilePicture: image } })
+        }
       }
     } else {
       await prisma.teacher.deleteMany({ where: { email } })
+      console.log(`[finalize] deleted teacher records for ${email}`)
 
       const existing = await prisma.student.findUnique({ where: { email } })
       if (!existing) {
         await prisma.student.create({
           data: { email, name, studentId: `STU-${Date.now()}`, profilePicture: image },
         })
-      } else if (!existing.profilePicture && image) {
-        await prisma.student.update({ where: { id: existing.id }, data: { profilePicture: image } })
+        console.log(`[finalize] created student record for ${email}`)
+      } else {
+        console.log(`[finalize] student record already exists for ${email}`)
+        if (!existing.profilePicture && image) {
+          await prisma.student.update({ where: { id: existing.id }, data: { profilePicture: image } })
+        }
       }
     }
 

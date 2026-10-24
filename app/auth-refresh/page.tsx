@@ -7,15 +7,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 /**
  * /auth-refresh?dest=/teacher/dashboard
  *
- * Intermediate page that forces NextAuth to re-read the role from DB
- * by calling update({ refreshRole: true }), then navigates to `dest`.
- *
- * This is needed because the JWT caches the role after first sign-in.
- * After finalize-teacher/student switches the DB record, we land here
- * to bust the cache before the user sees the dashboard.
+ * After finalize switches the DB record, we land here.
+ * We call session.update({ refreshRole: true }) which triggers the jwt callback
+ * to clear the cached role and re-read from DB, then navigate to the dashboard.
  */
 function AuthRefreshInner() {
-  const { update, status } = useSession()
+  const { update, data: session, status } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
   const dest = searchParams.get('dest') ?? '/dashboard'
@@ -23,13 +20,14 @@ function AuthRefreshInner() {
   useEffect(() => {
     if (status === 'loading') return
 
-    // Trigger JWT refresh — the jwt callback in auth.ts sets role=pending
-    // and userId=undefined when session.refreshRole is true, forcing a DB re-read
+    // Force JWT to re-read role from DB by triggering an update
     update({ refreshRole: true }).then(() => {
-      // Small delay to let the new token propagate, then navigate
-      setTimeout(() => router.replace(dest), 300)
+      // Navigate to destination — the updated token now has the correct role
+      router.replace(dest)
+    }).catch(() => {
+      router.replace(dest)
     })
-  }, [status, update, router, dest])
+  }, [status]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{

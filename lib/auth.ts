@@ -54,10 +54,10 @@ export const authOptions: NextAuthOptions = {
       const email = (user?.email ?? token.email) as string | undefined
       if (!email) return token
 
-      // Always look up the DB on first sign-in.
-      // On subsequent requests, only re-check if role is unresolved.
-      // This means after finalize switches roles, the next page load picks it up.
-      if (token.role && token.role !== "pending" && !user) return token
+      // Always re-read from DB on sign-in (user present) or when role is unresolved.
+      // We intentionally do NOT cache the role long-term because the same Gmail
+      // can switch between teacher and student roles via the login tabs.
+      if (token.role && token.role !== 'pending' && token.userId && !user) return token
 
       try {
         // Teacher takes priority
