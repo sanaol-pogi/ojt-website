@@ -43,6 +43,11 @@ export const authOptions: NextAuthOptions = {
       if (trigger === "update" && session) {
         if (session.profilePicture !== undefined) token.profilePicture = session.profilePicture
         if (session.name          !== undefined) token.name           = session.name
+        // If the client requests a role refresh, re-read from DB
+        if (session.refreshRole) {
+          token.userId = undefined
+          token.role   = "pending"
+        }
         return token
       }
 

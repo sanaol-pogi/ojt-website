@@ -6,8 +6,13 @@ import { prisma } from '@/lib/prisma'
 /**
  * Shared finalize logic for /api/auth/finalize-teacher and /api/auth/finalize-student.
  *
- * Intent is passed via the route PATH (not query params) because NextAuth v4
- * strips query params from callbackUrl before redirecting.
+ * Intent is in the route PATH (not query params) — NextAuth v4 strips query params
+ * from callbackUrl but always preserves the full path.
+ *
+ * After updating the DB record, we redirect to a small client-side page that calls
+ * NextAuth's update() to refresh the JWT with the new role, then navigates to the
+ * correct dashboard. This avoids clearing the session cookie (which would log the
+ * user out) while still getting a fresh JWT.
  */
 export async function GET(request: NextRequest, intent: 'teacher' | 'student') {
   const dest    = intent === 'teacher' ? '/teacher/dashboard' : '/dashboard'
@@ -24,7 +29,6 @@ export async function GET(request: NextRequest, intent: 'teacher' | 'student') {
     const image = session.user.image ?? null
 
     if (intent === 'teacher') {
-      // Switch to teacher: remove any student record for this email
       await prisma.student.deleteMany({ where: { email } })
 
       const existing = await prisma.teacher.findUnique({ where: { email } })
@@ -42,7 +46,6 @@ export async function GET(request: NextRequest, intent: 'teacher' | 'student') {
         await prisma.teacher.update({ where: { id: existing.id }, data: { profilePicture: image } })
       }
     } else {
-      // Switch to student: remove any teacher record for this email
       await prisma.teacher.deleteMany({ where: { email } })
 
       const existing = await prisma.student.findUnique({ where: { email } })
@@ -55,17 +58,10 @@ export async function GET(request: NextRequest, intent: 'teacher' | 'student') {
       }
     }
 
-    // Clear the session cookie so NextAuth re-issues a fresh JWT that reads
-    // the correct role from the DB record we just created/switched.
-    const res = NextResponse.redirect(new URL(dest, baseUrl))
-    const secure = process.env.NEXTAUTH_URL?.startsWith('https') ?? true
-    const cookieName = secure
-      ? '__Secure-next-auth.session-token'
-      : 'next-auth.session-token'
-    res.cookies.set(cookieName, '', {
-      path: '/', maxAge: 0, secure, httpOnly: true, sameSite: 'lax',
-    })
-    return res
+    // Redirect to a tiny refresh page that triggers a server-side session update,
+    // then forwards to the correct dashboard. The `dest` is passed as a query param
+    // on this internal redirect only (not through NextAuth).
+    return redirectTo(`/auth-refresh?dest=${encodeURIComponent(dest)}`)
 
   } catch (error) {
     console.error('finalize error:', error)
